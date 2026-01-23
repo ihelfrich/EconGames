@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Interactive microeconomics simulator - Learn economics through gameplay">
+  <meta name="author" content="Dr. Ian Helfrich">
+  <title>EconGames - Interactive Microeconomics Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #f8f4ec;
+      --bg-soft: #e7f3ef;
+      --ink: #1f2937;
+      --ink-muted: #5b6472;
+      --accent-blue: #2f80ed;
+      --accent-green: #22c55e;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f97316;
+      --panel: rgba(255, 255, 255, 0.88);
+      --panel-strong: rgba(255, 255, 255, 0.95);
+      --panel-border: rgba(15, 23, 42, 0.12);
+      --shadow-soft: 0 24px 60px rgba(15, 23, 42, 0.15);
+      --shadow-tight: 0 12px 30px rgba(15, 23, 42, 0.12);
+      --radius-xl: 20px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 10px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      color: var(--ink);
+      background: var(--bg-base);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(900px 600px at 8% 10%, rgba(47, 128, 237, 0.12), transparent 65%),
+        radial-gradient(800px 500px at 85% 5%, rgba(34, 197, 94, 0.12), transparent 60%),
+        radial-gradient(700px 500px at 80% 85%, rgba(249, 115, 22, 0.12), transparent 60%),
+        linear-gradient(120deg, #fbf5eb 0%, #e6f4f1 45%, #fbe7d2 100%);
+      z-index: -2;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+      background-size: 80px 80px;
+      opacity: 0.18;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    #app {
+      min-height: 100vh;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: clamp(18px, 2.5vw, 32px);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-xl);
+      padding: 18px 24px;
+      box-shadow: var(--shadow-tight);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand-title {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .brand-subtitle {
+      color: var(--ink-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .header-badges {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      background: rgba(47, 128, 237, 0.12);
+      color: var(--accent-blue);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+
+    .badge.secondary {
+      background: rgba(249, 115, 22, 0.12);
+      color: #c2410c;
+    }
+
+    .app-main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .game-shell {
+      background: var(--panel-strong);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-xl);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-soft);
+      animation: rise 0.6s ease both;
+    }
+
+    .game-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .game-header h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 22px;
+      letter-spacing: 0.4px;
+    }
+
+    .mode-pill {
+      background: rgba(34, 197, 94, 0.15);
+      color: #166534;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 12 / 7;
+      min-height: 320px;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      background: radial-gradient(circle at 15% 20%, rgba(47, 128, 237, 0.1), transparent 50%),
+        radial-gradient(circle at 85% 80%, rgba(34, 197, 94, 0.12), transparent 45%),
+        #f8fafc;
+    }
+
+    #game-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+    .game-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+      z-index: 5;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(15, 23, 42, 0.12);
+    }
+
+    .legend-item::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .legend-item.buyer::before {
+      background: var(--accent-blue);
+    }
+
+    .legend-item.seller::before {
+      background: var(--accent-green);
+    }
+
+    .game-hint {
+      align-self: flex-start;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.75);
+      color: #f8fafc;
+      border-radius: 10px;
+      font-size: 12px;
+      letter-spacing: 0.2px;
+      width: fit-content;
+    }
+
+    .game-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+      animation: pulse 1.6s infinite;
+    }
+
+    .dashboard {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px 18px;
+      box-shadow: var(--shadow-tight);
+      backdrop-filter: blur(12px);
+      animation: rise 0.6s ease both;
+    }
+
+    .dashboard .panel:nth-child(1) { animation-delay: 0.05s; }
+    .dashboard .panel:nth-child(2) { animation-delay: 0.1s; }
+    .dashboard .panel:nth-child(3) { animation-delay: 0.15s; }
+    .dashboard .panel:nth-child(4) { animation-delay: 0.2s; }
+    .dashboard .panel:nth-child(5) { animation-delay: 0.25s; }
+
+    .panel-header h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+    }
+
+    .panel-subtitle {
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-top: 4px;
+    }
+
+    .chart-wrap {
+      height: 240px;
+      margin-top: 14px;
+    }
+
+    .history-wrap {
+      height: 160px;
+      margin-top: 12px;
+    }
+
+    canvas#economicChart {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+    canvas#priceHistoryChart {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--ink-muted);
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .control-panel h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+    }
+
+    .control-group {
+      margin-top: 12px;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .value-display {
+      color: var(--accent-blue);
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-blue);
+    }
+
+    .mode-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .mode-btn {
+      padding: 10px;
+      border: 2px solid rgba(47, 128, 237, 0.4);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--accent-blue);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+    }
+
+    .mode-btn:hover {
+      background: rgba(47, 128, 237, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .mode-btn.active {
+      background: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+      box-shadow: 0 10px 20px rgba(47, 128, 237, 0.25);
+    }
+
+    .insights-panel p {
+      margin-top: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.4); opacity: 1; }
+    }
+
+    @media (max-width: 1100px) {
+      .app-main {
+        grid-template-columns: 1fr;
+      }
+      .game-shell {
+        order: 1;
+      }
+      .dashboard {
+        order: 2;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .app-header {
+        padding: 16px;
+      }
+      .game-shell {
+        padding: 16px;
+      }
+      .panel {
+        padding: 14px 16px 16px;
+      }
+      .mode-selector {
+        grid-template-columns: 1fr;
+      }
+      .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      }
+      .chart-wrap {
+        height: 200px;
+      }
+      .history-wrap {
+        height: 140px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="brand-block">
+        <div class="brand-title">EconGames</div>
+        <div class="brand-subtitle">Interactive Microeconomics Lab by Dr. Ian Helfrich</div>
+      </div>
+      <div class="header-badges">
+        <span class="badge">Live Simulation</span>
+        <span class="badge secondary">Agent-Based Learning</span>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="game-shell">
+        <div class="game-header">
+          <h2>Market Arena</h2>
+          <span class="mode-pill" id="modePill">Perfect Competition</span>
+        </div>
+
+        <div id="game-container">
+          <div class="game-overlay">
+            <div class="legend">
+              <span class="legend-item buyer">Buyers</span>
+              <span class="legend-item seller">Sellers</span>
+            </div>
+            <div class="game-hint">Hover agents to see budgets, WTP, and inventory.</div>
+          </div>
+        </div>
+
+        <div class="game-footer">
+          <span id="equilibriumReadout">Equilibrium: collecting trades…</span>
+          <span class="status"><span class="status-dot"></span>Market active</span>
+        </div>
+      </section>
+
+      <aside class="dashboard">
+        <section class="panel chart-panel">
+          <div class="panel-header">
+            <h2>Supply & Demand</h2>
+            <div class="panel-subtitle">Live curves derived from agent data</div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="economicChart"></canvas>
+          </div>
+        </section>
+
+        <section class="panel history-panel">
+          <div class="panel-header">
+            <h2>Price History</h2>
+            <div class="panel-subtitle">Last 100 trades over time</div>
+          </div>
+          <div class="history-wrap">
+            <canvas id="priceHistoryChart"></canvas>
+          </div>
+        </section>
+
+        <section class="panel stats-panel">
+          <div class="panel-header">
+            <h2>Market Snapshot</h2>
+            <div class="panel-subtitle" id="marketModeLabel">Mode: Perfect Competition</div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Avg Price (last 100)</div>
+              <div class="stat-value" id="marketPrice">$0.00</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total Trades</div>
+              <div class="stat-value" id="transactionCount">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Consumer Surplus</div>
+              <div class="stat-value" id="consumerSurplus">$0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Producer Surplus</div>
+              <div class="stat-value" id="producerSurplus">$0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Deadweight Loss</div>
+              <div class="stat-value" id="deadweightLoss">$0</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel control-panel">
+          <h2>Market Controls</h2>
+
+          <div class="control-group">
+            <label for="numBuyers">Buyers <span class="value-display" id="numBuyersValue">50</span></label>
+            <input type="range" id="numBuyers" min="10" max="200" value="50" step="10">
+          </div>
+
+          <div class="control-group">
+            <label for="numSellers">Sellers <span class="value-display" id="numSellersValue">50</span></label>
+            <input type="range" id="numSellers" min="10" max="200" value="50" step="10">
+          </div>
+
+          <div class="control-group">
+            <label for="tradeSpeed">Trade Speed <span class="value-display" id="tradeSpeedValue">1.0x</span></label>
+            <input type="range" id="tradeSpeed" min="0.5" max="3" value="1" step="0.1">
+          </div>
+
+          <div class="mode-selector">
+            <button class="mode-btn active" data-mode="perfect">Perfect Competition</button>
+            <button class="mode-btn" data-mode="monopoly">Monopoly</button>
+            <button class="mode-btn" data-mode="oligopoly">Oligopoly</button>
+            <button class="mode-btn" data-mode="monopolistic">Mon. Competition</button>
+          </div>
+        </section>
+
+        <section class="panel insights-panel">
+          <div class="panel-header">
+            <h2>Instructor Notes</h2>
+            <div class="panel-subtitle">Real-time interpretation</div>
+          </div>
+          <p id="insightText">Markets are warming up — once trades start, you’ll see surplus and equilibrium move in real time.</p>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

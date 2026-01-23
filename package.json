@@ -1,0 +1,30 @@
+{
+  "name": "econgames",
+  "version": "1.0.0",
+  "description": "Interactive microeconomics simulator with animated sprites - Dr. Ian Helfrich",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "economics",
+    "education",
+    "game",
+    "simulation",
+    "microeconomics"
+  ],
+  "author": "Dr. Ian Helfrich",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.1",
+    "phaser": "^3.70.0"
+  }
+}
