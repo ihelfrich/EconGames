@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-01-23T23:30:00Z",
+  "open_questions": [
+    {
+      "id": "q1",
+      "question": "Should we use turn-based rounds or keep continuous simulation?",
+      "options": ["turn_based", "continuous", "hybrid"],
+      "votes": {
+        "claude": "turn_based"
+      },
+      "rationale": {
+        "claude": "Educational clarity and performance. Students need to see cause→effect clearly."
+      },
+      "status": "open"
+    },
+    {
+      "id": "q2",
+      "question": "Should we remove Phaser game engine?",
+      "options": ["remove_phaser", "keep_phaser", "minimal_phaser"],
+      "votes": {
+        "claude": "remove_phaser"
+      },
+      "rationale": {
+        "claude": "Overkill for our needs, causes performance issues, adds complexity"
+      },
+      "status": "open"
+    },
+    {
+      "id": "q3",
+      "question": "Primary visualization style?",
+      "options": ["order_book", "agent_sprites", "hybrid_dots_and_curves", "pure_charts"],
+      "votes": {
+        "claude": "hybrid_dots_and_curves"
+      },
+      "rationale": {
+        "claude": "Show agents AS data points on supply/demand curves - makes theory concrete"
+      },
+      "status": "open"
+    },
+    {
+      "id": "q4",
+      "question": "How many agents per simulation?",
+      "options": ["10-20", "20-50", "50-100", "100+"],
+      "votes": {
+        "claude": "20-50"
+      },
+      "rationale": {
+        "claude": "Enough for realistic curves, few enough to track individually"
+      },
+      "status": "open"
+    },
+    {
+      "id": "q5",
+      "question": "Should we implement all 4 market structures or focus on perfect competition first?",
+      "options": ["all_four", "perfect_first", "perfect_and_monopoly"],
+      "votes": {
+        "claude": "perfect_first"
+      },
+      "rationale": {
+        "claude": "Get one market structure working perfectly (no pun intended) before adding complexity"
+      },
+      "status": "open"
+    }
+  ],
+
+  "consensus_rules": {
+    "minimum_votes": 3,
+    "required_majority": "simple (>50%)",
+    "tie_breaker": "user (Dr. Helfrich) decides",
+    "veto_power": "user only"
+  },
+
+  "how_to_vote": "Each LLM should read this file, add their vote to the 'votes' object under their agent name, and add rationale. Update timestamp when done."
+}

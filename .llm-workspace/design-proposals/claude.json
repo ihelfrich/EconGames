@@ -1,0 +1,138 @@
+{
+  "agent": "claude",
+  "timestamp": "2026-01-23T23:30:00Z",
+  "proposal_name": "Turn-Based Pedagogical Simulator",
+
+  "executive_summary": "Replace continuous arcade-style simulation with turn-based, step-through educational tool. Focus on clarity over spectacle. Show economic mechanisms explicitly.",
+
+  "core_design": {
+    "interaction_model": "turn-based",
+    "visualization": "order_book_plus_agents",
+    "performance_target": "instant (no animation lag)",
+    "educational_focus": "explicit_mechanism_display"
+  },
+
+  "key_features": [
+    {
+      "name": "Round-based execution",
+      "description": "Click 'Run Round' button to execute one market period",
+      "rationale": "Lets students see before/after, understand causation"
+    },
+    {
+      "name": "Pre-round agent display",
+      "description": "Show all agents' WTP/WTA as dots on supply/demand curve BEFORE trading",
+      "rationale": "Makes supply/demand curves concrete - they're not abstract, they're actual agents"
+    },
+    {
+      "name": "Animated market clearing",
+      "description": "Show matching process: highest WTP buyer + lowest WTA seller = trade",
+      "rationale": "Makes price discovery mechanism visible"
+    },
+    {
+      "name": "Post-round analysis",
+      "description": "Highlight completed trades, show surplus created, update stats",
+      "rationale": "Reinforces learning: trade creates value"
+    },
+    {
+      "name": "Agent inspector panel",
+      "description": "Click any agent → see utility function, budget constraint, optimal choice",
+      "rationale": "Shows micro foundations, connects individual behavior to market outcomes"
+    },
+    {
+      "name": "Scenario library",
+      "description": "Pre-built scenarios: 'Show deadweight loss', 'Demonstrate price ceiling', etc",
+      "rationale": "Instructor-friendly, standardized demonstrations"
+    }
+  ],
+
+  "technical_approach": {
+    "remove": [
+      "Phaser game engine (overkill, causes performance issues)",
+      "Continuous sprite movement",
+      "Particle effects",
+      "Complex animations"
+    ],
+    "add": [
+      "Canvas-based order book visualization",
+      "SVG for agent dots on curves",
+      "CSS transitions for smooth UI updates",
+      "Explicit step-through controls"
+    ],
+    "keep": [
+      "Chart.js for supply/demand curves",
+      "TypeScript strict mode",
+      "USC color theme",
+      "Educational overlay system (but redesigned)"
+    ]
+  },
+
+  "educational_improvements": {
+    "before_trade": [
+      "Show all agents' reservation prices",
+      "Highlight potential gains from trade",
+      "Display market imbalances"
+    ],
+    "during_trade": [
+      "Animate matching process",
+      "Show bid-ask spread closing",
+      "Highlight equilibrium formation"
+    ],
+    "after_trade": [
+      "Calculate and display surpluses",
+      "Show who traded, who didn't, and why",
+      "Update supply/demand curves with remaining agents"
+    ]
+  },
+
+  "performance_solution": {
+    "problem": "Phaser + 100+ sprites = lag",
+    "solution": "Simple DOM/Canvas rendering, no game engine",
+    "expected_result": "Instant updates, smooth on any device"
+  },
+
+  "ui_mockup_concept": "
+    ┌─────────────────────────────────────────────┐
+    │  Round: 1    [⏮️ Prev] [▶️ Run Round] [⏭️ Next] │
+    │  ┌─────────────────────────────────────┐   │
+    │  │  Supply/Demand Chart                │   │
+    │  │  • Each agent = dot on curve        │   │
+    │  │  • Trades animate buyer→seller      │   │
+    │  │  • Equilibrium highlighted          │   │
+    │  └─────────────────────────────────────┘   │
+    │  ┌─────────────────┬───────────────────┐   │
+    │  │ Agent Inspector │ Round Summary      │   │
+    │  │ Click agent →   │ Trades: 23        │   │
+    │  │ see details     │ CS: $450          │   │
+    │  │                 │ PS: $380          │   │
+    │  └─────────────────┴───────────────────┘   │
+    └─────────────────────────────────────────────┘
+  ",
+
+  "implementation_priority": [
+    "1. Create turn-based engine (replace continuous loop)",
+    "2. Build order book visualization",
+    "3. Add agent-as-dots-on-curve display",
+    "4. Implement step-through controls",
+    "5. Add agent inspector",
+    "6. Create scenario library"
+  ],
+
+  "questions_for_consensus": [
+    "Should we keep any continuous animation, or go fully turn-based?",
+    "How many agents per round? (fewer = clearer, more = realistic)",
+    "Should agents persist across rounds or reset each time?",
+    "Do we need multiple market structures, or focus on perfect competition first?"
+  ],
+
+  "estimated_effort": {
+    "complete_rewrite": "8-12 hours",
+    "iterative_improvement": "4-6 hours",
+    "recommendation": "Complete rewrite - current approach is fundamentally misaligned with educational goals"
+  },
+
+  "vote": {
+    "approach": "turn_based_with_step_through",
+    "confidence": "high",
+    "rationale": "Educational value >> game-like feel"
+  }
+}

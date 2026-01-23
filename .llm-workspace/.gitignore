@@ -1,0 +1,4 @@
+# This directory is for LLM coordination only
+# Commit this to git so all LLMs can collaborate
+!*.json
+!*.md

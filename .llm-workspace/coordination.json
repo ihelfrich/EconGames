@@ -1,0 +1,71 @@
+{
+  "project": "EconGames - Educational Economics Simulator Redesign",
+  "version": "2.0-brainstorm",
+  "timestamp": "2026-01-23T23:30:00Z",
+  "currentPhase": "brainstorming",
+  "objective": "Redesign for better educational value and performance",
+
+  "problems_identified": [
+    "Performance lag with 100+ agents",
+    "Unclear educational connection between visuals and economic theory",
+    "Market mechanisms may not accurately represent theory",
+    "Hard to see what's happening in trades",
+    "Continuous simulation makes it hard to follow cause-and-effect"
+  ],
+
+  "activeAgents": {
+    "claude": {
+      "status": "active",
+      "role": "Architecture & TypeScript implementation",
+      "lastUpdate": "2026-01-23T23:30:00Z"
+    },
+    "chatgpt": {
+      "status": "pending",
+      "role": "UI/UX design & educational content",
+      "lastUpdate": null
+    },
+    "gemini": {
+      "status": "pending",
+      "role": "Economic theory validation",
+      "lastUpdate": null
+    },
+    "copilot": {
+      "status": "pending",
+      "role": "Code review & optimization",
+      "lastUpdate": null
+    },
+    "blackbox": {
+      "status": "pending",
+      "role": "Testing & performance analysis",
+      "lastUpdate": null
+    }
+  },
+
+  "currentTask": {
+    "description": "Each LLM should analyze the current implementation and propose improvements",
+    "deadline": "Before implementation begins",
+    "deliverables": [
+      "Submit design proposal in design-proposals/{agent-name}.json",
+      "Review other agents' proposals",
+      "Vote on consensus decisions in questions.json"
+    ]
+  },
+
+  "communication_protocol": {
+    "read_before_write": "Always read coordination.json before making changes",
+    "update_timestamp": "Update your lastUpdate timestamp when making changes",
+    "proposal_format": "Use design-proposals/{agent-name}.json",
+    "consensus_voting": "Use questions.json for decisions needing agreement",
+    "task_claiming": "Update tasks/active.json when starting work"
+  },
+
+  "nextSteps": [
+    "1. Each LLM reviews current codebase",
+    "2. Each LLM submits design proposal",
+    "3. Review all proposals together",
+    "4. Vote on approach (turn-based vs continuous, visualization style, etc)",
+    "5. Divide implementation tasks",
+    "6. Implement in parallel",
+    "7. Integrate and test"
+  ]
+}
