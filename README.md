@@ -53,59 +53,45 @@ The output will be in the `dist/` directory, ready for GitHub Pages deployment.
 
 ## Deployment to GitHub Pages
 
-1. Ensure your repository is set up at `https://github.com/ihelfrich/EconGames`
+### Automated Deployment with GitHub Actions (Recommended)
 
-2. Build the project:
+This project uses GitHub Actions for automatic deployment. The workflow is already configured in `.github/workflows/deploy.yml`.
+
+**Setup Instructions:**
+
+1. **Configure GitHub Pages Source:**
+   - Go to `https://github.com/ihelfrich/EconGames/settings/pages`
+   - Under "Build and deployment", set **Source** to "GitHub Actions"
+
+2. **Set Actions Permissions:**
+   - Go to `https://github.com/ihelfrich/EconGames/settings/actions`
+   - Under "Workflow permissions", select **"Read and write permissions"**
+   - Check **"Allow GitHub Actions to create and approve pull requests"**
+   - Click **Save**
+
+3. **Push to main branch:**
    ```bash
-   npm run build
+   git push
    ```
 
-3. Deploy to GitHub Pages:
-   ```bash
-   git add dist -f
-   git commit -m "Deploy to GitHub Pages"
-   git subtree push --prefix dist origin gh-pages
-   ```
+4. **Your site will be live at:** `https://ihelfrich.github.io/EconGames/`
 
-4. Configure GitHub Pages:
-   - Go to repository Settings → Pages
-   - Set source to `gh-pages` branch
-   - Your site will be live at `https://ihelfrich.github.io/EconGames/`
+**Troubleshooting:**
 
-### Automated Deployment (Recommended)
+If you get a 404 error during deployment, ensure you've completed step 2 above (Actions permissions).
 
-Create `.github/workflows/deploy.yml`:
+### Manual Deployment (Alternative)
 
-```yaml
-name: Deploy to GitHub Pages
+If you prefer manual deployment:
 
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+```bash
+npm run build
+git add dist -f
+git commit -m "Deploy to GitHub Pages"
+git subtree push --prefix dist origin gh-pages
 ```
+
+Then configure GitHub Pages to use the `gh-pages` branch.
 
 ## Architecture
 
