@@ -69,6 +69,78 @@ const educationOverlay = new EducationOverlay();
 const priceHistoryChart = new PriceHistoryChart('priceHistoryChart');
 
 let lastAveragePrice = 0;
+let isPaused = false;
+
+function togglePause(): void {
+  isPaused = !isPaused;
+  const pauseBtn = document.getElementById('pauseBtn');
+  const statusDot = document.querySelector('.status-dot') as HTMLElement;
+  const statusText = document.querySelector('.status') as HTMLElement;
+
+  if (isPaused) {
+    document.body.classList.add('paused');
+    if (pauseBtn) {
+      pauseBtn.innerHTML = '▶ Play';
+      pauseBtn.classList.remove('primary');
+    }
+    if (statusDot) {
+      statusDot.style.background = '#f59e0b';
+      statusDot.style.boxShadow = '0 0 8px rgba(245, 158, 11, 0.6)';
+    }
+    if (statusText) {
+      const dot = statusText.querySelector('.status-dot');
+      statusText.innerHTML = '';
+      if (dot) statusText.appendChild(dot);
+      statusText.append('Paused');
+    }
+    game.scene.pause('MainScene');
+  } else {
+    document.body.classList.remove('paused');
+    if (pauseBtn) {
+      pauseBtn.innerHTML = '⏸ Pause';
+      pauseBtn.classList.add('primary');
+    }
+    if (statusDot) {
+      statusDot.style.background = '#22c55e';
+      statusDot.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.6)';
+    }
+    if (statusText) {
+      const dot = statusText.querySelector('.status-dot');
+      statusText.innerHTML = '';
+      if (dot) statusText.appendChild(dot);
+      statusText.append('Market active');
+    }
+    game.scene.resume('MainScene');
+  }
+}
+
+function resetSimulation(): void {
+  // Reset market
+  market.reset();
+
+  // Restart scene
+  game.scene.stop('MainScene');
+  game.scene.start('MainScene', { market });
+
+  // Reset pause state
+  if (isPaused) {
+    togglePause();
+  }
+
+  // Reset UI
+  lastAveragePrice = 0;
+  const priceEl = document.getElementById('marketPrice');
+  const transEl = document.getElementById('transactionCount');
+  const csEl = document.getElementById('consumerSurplus');
+  const psEl = document.getElementById('producerSurplus');
+  const dwlEl = document.getElementById('deadweightLoss');
+
+  if (priceEl) priceEl.textContent = '$0.00';
+  if (transEl) transEl.textContent = '0';
+  if (csEl) csEl.textContent = '$0';
+  if (psEl) psEl.textContent = '$0';
+  if (dwlEl) dwlEl.textContent = '$0';
+}
 
 function updateModeDisplay(mode: MarketMode): void {
   const modeLabel = document.getElementById('marketModeLabel');
@@ -165,16 +237,38 @@ function setupControls(): void {
     });
   }
 
-  // Trade speed slider
-  const tradeSpeedSlider = document.getElementById('tradeSpeed') as HTMLInputElement;
-  const tradeSpeedValue = document.getElementById('tradeSpeedValue');
-  if (tradeSpeedSlider && tradeSpeedValue) {
-    tradeSpeedSlider.addEventListener('input', (e) => {
-      const value = parseFloat((e.target as HTMLInputElement).value);
-      tradeSpeedValue.textContent = `${value.toFixed(1)}x`;
-      mainScene.setTradeSpeed(value);
+  // Speed preset buttons
+  const speedButtons = document.querySelectorAll('.speed-btn');
+  speedButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      const speed = parseFloat((e.target as HTMLElement).getAttribute('data-speed') || '1');
+      mainScene.setTradeSpeed(speed);
+
+      // Update active state
+      speedButtons.forEach(btn => btn.classList.remove('active'));
+      (e.target as HTMLElement).classList.add('active');
     });
+  });
+
+  // Pause/Play button
+  const pauseBtn = document.getElementById('pauseBtn');
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', togglePause);
   }
+
+  // Reset button
+  const resetBtn = document.getElementById('resetBtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', resetSimulation);
+  }
+
+  // Keyboard shortcut: Spacebar for pause/play
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && e.target === document.body) {
+      e.preventDefault();
+      togglePause();
+    }
+  });
 
   // Market mode buttons
   const modeButtons = document.querySelectorAll('.mode-btn');
@@ -190,6 +284,16 @@ function setupControls(): void {
       mainScene.setMarketMode(mode);
       market.setMode(mode);
       updateModeDisplay(mode);
+
+      // Visual flash indicator
+      const gameContainer = document.getElementById('game-container');
+      if (gameContainer) {
+        gameContainer.style.transition = 'box-shadow 0.3s ease';
+        gameContainer.style.boxShadow = '0 0 40px rgba(153, 0, 0, 0.6), inset 0 0 80px rgba(255, 204, 0, 0.3)';
+        setTimeout(() => {
+          gameContainer.style.boxShadow = '';
+        }, 600);
+      }
     });
   });
 
@@ -198,6 +302,8 @@ function setupControls(): void {
 
 // Update charts and education system periodically
 setInterval(() => {
+  if (isPaused) return; // Skip updates when paused
+
   const buyers = market.getBuyers();
   const sellers = market.getSellers();
   const state = market.getMarketState();
@@ -206,6 +312,19 @@ setInterval(() => {
   priceHistoryChart.addPrice(state.averagePrice);
   updateEquilibriumReadout();
   updateInsights();
+
+  // Update stats display
+  const priceEl = document.getElementById('marketPrice');
+  const transEl = document.getElementById('transactionCount');
+  const csEl = document.getElementById('consumerSurplus');
+  const psEl = document.getElementById('producerSurplus');
+  const dwlEl = document.getElementById('deadweightLoss');
+
+  if (priceEl) priceEl.textContent = `$${state.averagePrice.toFixed(2)}`;
+  if (transEl) transEl.textContent = state.totalTransactions.toString();
+  if (csEl) csEl.textContent = `$${Math.round(state.consumerSurplus)}`;
+  if (psEl) psEl.textContent = `$${Math.round(state.producerSurplus)}`;
+  if (dwlEl) dwlEl.textContent = `$${Math.round(state.deadweightLoss)}`;
 
   educationOverlay.analyzeMarket({
     mode: state.mode,

@@ -11,19 +11,27 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-base: #f8f4ec;
-      --bg-soft: #e7f3ef;
+      /* USC Colors */
+      --usc-cardinal: #990000;
+      --usc-gold: #FFCC00;
+      --usc-cardinal-light: #cc0000;
+      --usc-cardinal-dark: #660000;
+
+      --bg-base: #fff8f0;
+      --bg-soft: #ffe8d6;
       --ink: #1f2937;
       --ink-muted: #5b6472;
       --accent-blue: #2f80ed;
       --accent-green: #22c55e;
       --accent-amber: #f59e0b;
       --accent-rose: #f97316;
+      --accent-cardinal: var(--usc-cardinal);
+      --accent-gold: var(--usc-gold);
       --panel: rgba(255, 255, 255, 0.88);
       --panel-strong: rgba(255, 255, 255, 0.95);
-      --panel-border: rgba(15, 23, 42, 0.12);
-      --shadow-soft: 0 24px 60px rgba(15, 23, 42, 0.15);
-      --shadow-tight: 0 12px 30px rgba(15, 23, 42, 0.12);
+      --panel-border: rgba(153, 0, 0, 0.15);
+      --shadow-soft: 0 24px 60px rgba(153, 0, 0, 0.15);
+      --shadow-tight: 0 12px 30px rgba(153, 0, 0, 0.12);
       --radius-xl: 20px;
       --radius-lg: 16px;
       --radius-md: 12px;
@@ -50,10 +58,10 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(900px 600px at 8% 10%, rgba(47, 128, 237, 0.12), transparent 65%),
-        radial-gradient(800px 500px at 85% 5%, rgba(34, 197, 94, 0.12), transparent 60%),
-        radial-gradient(700px 500px at 80% 85%, rgba(249, 115, 22, 0.12), transparent 60%),
-        linear-gradient(120deg, #fbf5eb 0%, #e6f4f1 45%, #fbe7d2 100%);
+        radial-gradient(900px 600px at 8% 10%, rgba(153, 0, 0, 0.08), transparent 65%),
+        radial-gradient(800px 500px at 85% 5%, rgba(255, 204, 0, 0.12), transparent 60%),
+        radial-gradient(700px 500px at 80% 85%, rgba(153, 0, 0, 0.10), transparent 60%),
+        linear-gradient(120deg, #fff8f0 0%, #ffe8d6 45%, #fff4e6 100%);
       z-index: -2;
     }
 
@@ -114,8 +122,8 @@
     }
 
     .badge {
-      background: rgba(47, 128, 237, 0.12);
-      color: var(--accent-blue);
+      background: rgba(153, 0, 0, 0.15);
+      color: var(--usc-cardinal);
       padding: 6px 12px;
       border-radius: 999px;
       font-size: 12px;
@@ -124,8 +132,8 @@
     }
 
     .badge.secondary {
-      background: rgba(249, 115, 22, 0.12);
-      color: #c2410c;
+      background: rgba(255, 204, 0, 0.25);
+      color: #8b6914;
     }
 
     .app-main {
@@ -383,7 +391,100 @@
 
     input[type="range"] {
       width: 100%;
-      accent-color: var(--accent-blue);
+      accent-color: var(--usc-cardinal);
+    }
+
+    .sim-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--panel-border);
+    }
+
+    .control-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: 2px solid var(--usc-cardinal);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--usc-cardinal);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .control-btn:hover {
+      background: rgba(153, 0, 0, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .control-btn.primary {
+      background: var(--usc-cardinal);
+      color: var(--usc-gold);
+    }
+
+    .control-btn.primary:hover {
+      background: var(--usc-cardinal-light);
+    }
+
+    .speed-buttons {
+      display: flex;
+      gap: 4px;
+    }
+
+    .speed-btn {
+      padding: 6px 10px;
+      border: 1px solid rgba(153, 0, 0, 0.3);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--usc-cardinal);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .speed-btn:hover {
+      background: rgba(153, 0, 0, 0.1);
+    }
+
+    .speed-btn.active {
+      background: var(--usc-cardinal);
+      color: var(--usc-gold);
+      border-color: var(--usc-cardinal);
+    }
+
+    .paused-overlay {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(153, 0, 0, 0.95);
+      color: var(--usc-gold);
+      padding: 24px 48px;
+      border-radius: 16px;
+      font-size: 24px;
+      font-weight: 700;
+      z-index: 1000;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      animation: pulse-pause 1.5s ease-in-out infinite;
+    }
+
+    body.paused .paused-overlay {
+      display: block;
+    }
+
+    @keyframes pulse-pause {
+      0%, 100% { opacity: 0.9; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
     }
 
     .mode-selector {
@@ -395,9 +496,9 @@
 
     .mode-btn {
       padding: 10px;
-      border: 2px solid rgba(47, 128, 237, 0.4);
+      border: 2px solid rgba(153, 0, 0, 0.4);
       background: rgba(255, 255, 255, 0.9);
-      color: var(--accent-blue);
+      color: var(--usc-cardinal);
       border-radius: 10px;
       cursor: pointer;
       font-size: 12px;
@@ -406,15 +507,15 @@
     }
 
     .mode-btn:hover {
-      background: rgba(47, 128, 237, 0.1);
+      background: rgba(153, 0, 0, 0.1);
       transform: translateY(-1px);
     }
 
     .mode-btn.active {
-      background: var(--accent-blue);
-      color: white;
-      border-color: var(--accent-blue);
-      box-shadow: 0 10px 20px rgba(47, 128, 237, 0.25);
+      background: var(--usc-cardinal);
+      color: var(--usc-gold);
+      border-color: var(--usc-cardinal);
+      box-shadow: 0 10px 20px rgba(153, 0, 0, 0.35);
     }
 
     .insights-panel p {
@@ -507,8 +608,9 @@
               <span class="legend-item buyer">Buyers</span>
               <span class="legend-item seller">Sellers</span>
             </div>
-            <div class="game-hint">Hover agents to see budgets, WTP, and inventory.</div>
+            <div class="game-hint">Hover agents to see budgets, WTP, and inventory. Press SPACE to pause.</div>
           </div>
+          <div class="paused-overlay">⏸ PAUSED</div>
         </div>
 
         <div class="game-footer">
@@ -581,8 +683,19 @@
           </div>
 
           <div class="control-group">
-            <label for="tradeSpeed">Trade Speed <span class="value-display" id="tradeSpeedValue">1.0x</span></label>
-            <input type="range" id="tradeSpeed" min="0.5" max="3" value="1" step="0.1">
+            <label>Speed Presets</label>
+            <div class="speed-buttons">
+              <button class="speed-btn" data-speed="0.25">0.25x</button>
+              <button class="speed-btn" data-speed="0.5">0.5x</button>
+              <button class="speed-btn active" data-speed="1">1x</button>
+              <button class="speed-btn" data-speed="2">2x</button>
+              <button class="speed-btn" data-speed="4">4x</button>
+            </div>
+          </div>
+
+          <div class="sim-controls">
+            <button class="control-btn primary" id="pauseBtn">⏸ Pause</button>
+            <button class="control-btn" id="resetBtn">↻ Reset</button>
           </div>
 
           <div class="mode-selector">
