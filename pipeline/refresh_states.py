@@ -4,8 +4,8 @@ pipeline/snapshots/state_laus.csv.
 
 The twin assimilates one regional dial per state each month, so every state's
 unemployment rate and labor force come from here. The BLS flat file is tried
-first (one request for all states); FRED's copies of the same series are the
-fallback. If both fail, the committed snapshot stays in charge and the script
+first (one request for all states), then the BLS public API, then FRED's
+copies of the same series. If both fail, the committed snapshot stays in charge and the script
 exits 0, so an outage never breaks a deploy.
 
     python3 pipeline/refresh_states.py
@@ -14,7 +14,9 @@ exits 0, so an outage never breaks a deploy.
 from __future__ import annotations
 
 import csv
+import datetime
 import io
+import json
 import os
 import sys
 import time
@@ -35,13 +37,46 @@ STATES = {
 }
 UA = {"User-Agent": "EconTwin data refresh (https://github.com/ihelfrich/EconGames)"}
 BLS_URL = "https://download.bls.gov/pub/time.series/la/la.data.3.AllStatesS"
+BLS_API = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd=2000-01-01"
 
 
-def fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=120) as r:
+def fetch(url: str, body: bytes | None = None, timeout: int = 60) -> str:
+    headers = dict(UA, **({"Content-Type": "application/json"} if body else {}))
+    req = urllib.request.Request(url, data=body, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8")
+
+
+def series_id(fips: str, measure: str) -> str:
+    return f"LASST{fips}00000000000{measure}"
+
+
+def from_bls_api() -> dict[tuple[str, str], dict[str, float]]:
+    """The public API without a key: 25 series and 10 years per request."""
+    ids = [series_id(f, m) for f in STATES for m in ("03", "06")]
+    this_year = datetime.date.today().year
+    out: dict[tuple[str, str], dict[str, float]] = {}
+    for y0 in range(START_YEAR, this_year + 1, 10):
+        for k in range(0, len(ids), 25):
+            body = json.dumps({"seriesid": ids[k:k + 25], "startyear": str(y0), "endyear": str(min(y0 + 9, this_year))})
+            res = json.loads(fetch(BLS_API, body.encode()))
+            if res.get("status") != "REQUEST_SUCCEEDED":
+                raise RuntimeError(f"BLS API: {res.get('status')} {res.get('message')}")
+            for series in res["Results"]["series"]:
+                sid = series["seriesID"]
+                fips, measure = sid[5:7], sid[18:20]
+                for obs in series["data"]:
+                    if not obs["period"].startswith("M") or obs["period"] == "M13":
+                        continue
+                    try:
+                        v = float(obs["value"])
+                    except ValueError:
+                        continue
+                    key = (f"{obs['year']}-{obs['period'][1:]}", fips)
+                    out.setdefault(key, {})["ur" if measure == "03" else "lf"] = v
+            print(f"  BLS API {y0}: series {k + 1}-{min(k + 25, len(ids))}", flush=True)
+    return out
 
 
 def from_bls() -> dict[tuple[str, str], dict[str, float]]:
@@ -70,6 +105,7 @@ def from_bls() -> dict[tuple[str, str], dict[str, float]]:
 
 def from_fred() -> dict[tuple[str, str], dict[str, float]]:
     out: dict[tuple[str, str], dict[str, float]] = {}
+    fetch(FRED_URL.format(sid="CAUR"), timeout=20)  # fail fast if FRED is unreachable
     for fips, st in STATES.items():
         for field, sid in (("ur", f"{st}UR"), ("lf", f"{st}LF")):
             text = fetch(FRED_URL.format(sid=sid))
@@ -84,16 +120,16 @@ def from_fred() -> dict[tuple[str, str], dict[str, float]]:
 
 def main():
     data = {}
-    for name, source in (("BLS", from_bls), ("FRED", from_fred)):
+    for name, source in (("BLS", from_bls), ("BLS API", from_bls_api), ("FRED", from_fred)):
         try:
             data = source()
             months = {m for m, _ in data}
-            print(f"{name}: {len(data)} state-months, {min(months)} to {max(months)}")
+            print(f"{name}: {len(data)} state-months, {min(months)} to {max(months)}", flush=True)
             if len({f for _, f in data}) == len(STATES):
                 break
             print(f"{name}: missing states, trying the next source", file=sys.stderr)
         except Exception as exc:  # noqa: BLE001 - any failure falls through
-            print(f"{name} failed ({exc})", file=sys.stderr)
+            print(f"{name} failed ({exc})", file=sys.stderr, flush=True)
         data = {}
     if not data:
         print("No state source reachable; keeping the committed snapshot.", file=sys.stderr)

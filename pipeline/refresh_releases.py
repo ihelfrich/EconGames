@@ -29,11 +29,11 @@ SERIES = [
 URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd=2000-01-01"
 
 
-def pull(sid: str) -> dict[str, str]:
-    for attempt in range(3):
+def pull(sid: str, attempts: int = 3, timeout: int = 60) -> dict[str, str]:
+    for attempt in range(attempts):
         try:
             req = urllib.request.Request(URL.format(sid=sid), headers={"User-Agent": "EconTwin data refresh"})
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
                 text = r.read().decode("utf-8")
             rows = list(csv.reader(io.StringIO(text)))
             # header is DATE,<id> or observation_date,<id>
@@ -50,12 +50,16 @@ def pull(sid: str) -> dict[str, str]:
 
 
 def main():
+    # one quick probe first, so an unreachable FRED costs seconds, not an hour of retries
+    if not pull("UNRATE", attempts=2, timeout=20):
+        print("FRED unreachable; keeping the committed snapshot.", file=sys.stderr)
+        return
     data = {}
     for sid in SERIES:
         vals = pull(sid)
         if vals:
             data[sid] = vals
-            print(f"{sid}: {len(vals)} obs, latest {max(vals)}")
+            print(f"{sid}: {len(vals)} obs, latest {max(vals)}", flush=True)
     if "UNRATE" not in data:
         print("FRED unreachable; keeping the committed snapshot.", file=sys.stderr)
         return
