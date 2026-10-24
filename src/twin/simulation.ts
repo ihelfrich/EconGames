@@ -12,6 +12,7 @@ import { Assimilator, buildFrames, policyFor, type ReleaseFrame } from './assimi
 import type { TwinData } from './data';
 import { Engine, measure, type MonthStats } from './engine';
 import { DEFAULT_POPULATION, synthesize, type PopulationOptions } from './population';
+import { StateMap } from './states';
 import { DEFAULT_POLICY, type Drivers, type Policy, World } from './world';
 
 export interface Shocks {
@@ -41,6 +42,11 @@ export interface MonthRecord {
   policyNote: string;
   observed: ReleaseFrame | null;
   evaluations: number;
+  /** state demand and labor-force dials (log) used this month, null without state data */
+  stateLogR: Float32Array | null;
+  stateLogQ: Float32Array | null;
+  /** state-gap tracking error of the solve (share), null when not solved against states */
+  stateError: number | null;
 }
 
 export class Simulation {
@@ -55,19 +61,23 @@ export class Simulation {
   drivers: Drivers;
   shocks: Shocks;
   parent: Simulation | null = null;
+  readonly states: StateMap | null;
 
   private constructor(data: TwinData, world: World, engine: Engine) {
     this.data = data;
     this.world = world;
     this.engine = engine;
     this.frames = buildFrames(data.releases, data.counties.meta.sectors, world.label(0));
-    this.assim = new Assimilator(engine);
+    const st = data.releases.states;
+    this.states = st ? new StateMap(data.counties.fips, st.codes) : null;
+    this.assim = new Assimilator(engine, this.states);
     const ns = world.ns;
     this.drivers = {
       demand: 1,
       participation: 1,
       sector: new Float64Array(ns).fill(1),
       regional: new Float64Array(world.nc).fill(1),
+      lfRegional: new Float64Array(world.nc).fill(1),
       policy: DEFAULT_POLICY,
     };
     this.shocks = noShocks(ns, world.nc);
@@ -78,7 +88,7 @@ export class Simulation {
     const engine = new Engine(data.counties);
     const sim = new Simulation(data, world, engine);
     const stats = engine.spinup(world, sim.drivers, spinupMonths);
-    sim.assim.lf0 = stats.laborForce;
+    sim.assim.calibrate(world, stats.laborForce);
     sim.countyHistory.push(stats.countyU);
     sim.history.push({
       label: world.label(0),
@@ -90,6 +100,9 @@ export class Simulation {
       policyNote: '',
       observed: sim.frames[0] ?? null,
       evaluations: 0,
+      stateLogR: null,
+      stateLogQ: null,
+      stateError: null,
     });
     return sim;
   }
@@ -116,12 +129,12 @@ export class Simulation {
     if (this.parent) {
       const p = this.parent.history[this.world.t + 1];
       if (!p) throw new Error('step the parent timeline first');
-      this.setDrivers(p.logDemand, p.participation, p.observed?.sectorMix ?? this.drivers.sector, p.policy);
+      this.setDrivers(p.logDemand, p.participation, p.observed?.sectorMix ?? this.drivers.sector, p.policy, p.stateLogR, p.stateLogQ);
       const stats = this.engine.step(this.world, this.drivers);
       rec = { ...p, mode: 'branch', stats, policy: this.drivers.policy, evaluations: 1 };
     } else if (frame && frame.unrate != null) {
       const res = this.assim.step(this.world, frame, (w) => {
-        this.setDrivers(this.assim.logA, this.assim.P, frame.sectorMix, pol.policy);
+        this.setDrivers(this.assim.logA, this.assim.P, frame.sectorMix, pol.policy, this.assim.stateLogR, this.assim.stateLogQ);
         return this.engine.step(w, this.drivers);
       });
       rec = {
@@ -134,24 +147,47 @@ export class Simulation {
         policyNote: pol.changed ? pol.note : '',
         observed: frame,
         evaluations: res.evaluations,
+        stateLogR: this.assim.stateLogR && Float32Array.from(this.assim.stateLogR),
+        stateLogQ: this.assim.stateLogQ && Float32Array.from(this.assim.stateLogQ),
+        stateError: res.stateError,
       };
     } else {
       const last = this.history[this.history.length - 1];
-      this.setDrivers(last.logDemand, last.participation, this.drivers.sector, pol.policy);
+      this.setDrivers(last.logDemand, last.participation, this.drivers.sector, pol.policy, last.stateLogR, last.stateLogQ);
       const stats = this.engine.step(this.world, this.drivers);
-      rec = { label, mode: 'forecast', stats, logDemand: last.logDemand, participation: last.participation, policy: this.drivers.policy, policyNote: '', observed: null, evaluations: 1 };
+      rec = {
+        label,
+        mode: 'forecast',
+        stats,
+        logDemand: last.logDemand,
+        participation: last.participation,
+        policy: this.drivers.policy,
+        policyNote: '',
+        observed: null,
+        evaluations: 1,
+        stateLogR: last.stateLogR,
+        stateLogQ: last.stateLogQ,
+        stateError: null,
+      };
     }
     this.history.push(rec);
     this.countyHistory.push(rec.stats.countyU);
     return rec;
   }
 
-  private setDrivers(logA: number, P: number, mix: Float64Array, policy: Policy) {
+  private setDrivers(logA: number, P: number, mix: Float64Array, policy: Policy, logR: ArrayLike<number> | null, logQ: ArrayLike<number> | null) {
     const s = this.shocks;
     this.drivers.demand = Math.exp(logA) * s.demand;
     this.drivers.participation = P;
     for (let k = 0; k < this.drivers.sector.length; k++) this.drivers.sector[k] = mix[k] * s.sector[k];
-    this.drivers.regional = s.regional;
+    const reg = this.drivers.regional;
+    const lfr = this.drivers.lfRegional!;
+    const stateOf = this.states?.stateOf;
+    for (let c = 0; c < reg.length; c++) {
+      const st = stateOf ? stateOf[c] : -1;
+      reg[c] = s.regional[c] * (logR && st >= 0 ? Math.exp(logR[st]) : 1);
+      lfr[c] = logQ && st >= 0 ? Math.exp(logQ[st]) : 1;
+    }
     const base = s.policy ?? policy;
     this.drivers.policy = s.matchBoost === 1 ? base : { ...base, matchBoost: base.matchBoost * s.matchBoost };
   }
@@ -161,6 +197,8 @@ export class Simulation {
     const b = new Simulation(this.data, this.world.clone(), this.engine);
     b.parent = this;
     b.assim.lf0 = this.assim.lf0;
+    b.drivers.regional = this.drivers.regional.slice();
+    b.drivers.lfRegional = this.drivers.lfRegional!.slice();
     b.history = this.history.slice();
     b.countyHistory = this.countyHistory.slice();
     b.drivers.sector = this.drivers.sector.slice();

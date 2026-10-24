@@ -38,11 +38,25 @@ const lt = sim.history.slice(1).filter((h) => h.observed?.longTermShare != null)
 const ltErr = lt.map((h) => Math.abs(h.stats.longTermShare - h.observed!.longTermShare!));
 console.log(`untargeted: long-term unemployment share error, mean ${(100 * ltErr.reduce((a, b) => a + b, 0) / ltErr.length).toFixed(1)} pp`);
 
+const st = sim.history.slice(1).filter((h) => h.stateError != null);
+if (st.length) {
+  const errs = st.map((h) => h.stateError!);
+  const apr = sim.history.find((h) => h.label === '2020-04');
+  console.log(
+    `state releases: ${sim.states!.n} states, gap tracking error mean ${(100 * errs.reduce((a, b) => a + b, 0) / errs.length).toFixed(2)} pp, max ${(100 * Math.max(...errs)).toFixed(2)} pp` +
+      (apr?.stateLogR ? `; April 2020 hidden state demand: ${sim.states!.postal.map((p, k) => [p, Math.exp(apr.stateLogR![k])] as const).sort((a, b) => a[1] - b[1]).slice(0, 4).map(([p, v]) => `${p} ${(100 * (v - 1)).toFixed(0)}%`).join(', ')}` : ''),
+  );
+}
+
 const rate2020 = sim.annualCountyRate(2020);
+const rate2016 = sim.annualCountyRate(2016);
 if (rate2020) {
-  const bt = spatialBacktest(data.counties, rate2020);
+  const bt = spatialBacktest(data.counties, rate2020, 2020, 2016, rate2016);
+  const f = (x: number) => x.toFixed(2).padStart(6);
   console.log(`\nSpatial backtest, ${bt.counties} counties, ${bt.baseYear} -> ${bt.year} (BLS LAUS annual averages)`);
   console.log(`  national: ${(100 * bt.national.actualBase).toFixed(1)}% -> ${(100 * bt.national.actual).toFixed(1)}%`);
-  console.log(`  RMSE of ${bt.year} county rates (pp): twin ${bt.rmse.twin.toFixed(2)} | uniform shift ${bt.rmse.uniform.toFixed(2)} | proportional ${bt.rmse.proportional.toFixed(2)}`);
-  console.log(`  correlation of predicted vs actual change: twin ${bt.changeCorrelation.twin.toFixed(2)} | proportional ${bt.changeCorrelation.proportional.toFixed(2)}`);
+  console.log('  predictor              RMSE  Δcorr | within-state RMSE  Δcorr');
+  for (const k of Object.keys(bt.rmse) as (keyof typeof bt.rmse)[]) {
+    console.log(`  ${k.padEnd(19)} ${f(bt.rmse[k])} ${f(bt.changeCorrelation[k])} |            ${f(bt.withinState.rmse[k])} ${f(bt.withinState.changeCorrelation[k])}`);
+  }
 }

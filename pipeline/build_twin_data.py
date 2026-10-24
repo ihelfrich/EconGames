@@ -409,7 +409,7 @@ def build_releases():
     def col(name):
         return [series.get(name, {}).get(m) for m in months]
 
-    return {
+    out = {
         "months": months,
         "unrate": col("UNRATE"),
         "payems": col("PAYEMS"),
@@ -422,6 +422,28 @@ def build_releases():
         "sectorGroups": groups,
         "sectorSeries": used,
         "sources": sorted(set(sources.values())),
+    }
+    states = build_state_releases(months)
+    if states:
+        out["states"] = states
+        out["sources"].append("BLS Local Area Unemployment Statistics, states, seasonally adjusted")
+    return out
+
+
+def build_state_releases(months):
+    """Monthly state unemployment rate (%) and labor force, aligned with months."""
+    path = os.path.join(ROOT, "pipeline", "snapshots", "state_laus.csv")
+    if not os.path.exists(path):
+        return None
+    vals = {}
+    with open(path) as f:
+        for row in csv.DictReader(f):
+            vals.setdefault(row["state"], {})[row["month"]] = (float(row["ur"]), float(row["lf"]))
+    codes = sorted(vals)
+    return {
+        "codes": codes,
+        "unrate": [[vals[c][m][0] if m in vals[c] else None for m in months] for c in codes],
+        "laborForce": [[vals[c][m][1] if m in vals[c] else None for m in months] for c in codes],
     }
 
 

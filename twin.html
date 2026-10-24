@@ -125,6 +125,10 @@
     .chart-box.small { height: 120px; }
     .key { display: flex; gap: 12px; font-size: 11px; color: var(--ink-2); margin: 6px 0 4px; flex-wrap: wrap; }
     .key span::before { content: ''; display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--c); vertical-align: 3px; margin-right: 5px; }
+    .state-line { font-size: 12px; color: var(--ink-2); margin: 6px 0 2px; line-height: 1.45; }
+    .state-line b { color: var(--ink); font-weight: 600; }
+    .state-line .neg { color: #ff8a7a; }
+    .state-line .pos { color: #7cc4e8; }
     .muted { color: var(--ink-3); font-size: 12px; line-height: 1.45; }
     .row { display: flex; gap: 8px; align-items: center; }
     .grow { flex: 1; }
@@ -301,8 +305,9 @@
             <div class="kpi"><div class="k">BLS 2020</div><div class="v" id="cU20">—</div><div class="s" id="cU16"></div></div>
             <div class="kpi"><div class="k">Avg pay</div><div class="v" id="cPay">—</div><div class="s" id="cPaySub"></div></div>
           </div>
-          <div class="key"><span style="--c: var(--twin)">This county</span><span style="--c: #6b7487">Nation</span><span style="--c: var(--branch)" id="cKeyBranch" class="hidden">Your timeline</span></div>
+          <div class="key"><span style="--c: var(--twin)">This county</span><span style="--c: var(--real)" id="cKeyState" class="hidden">State (BLS)</span><span style="--c: #6b7487">Nation</span><span style="--c: var(--branch)" id="cKeyBranch" class="hidden">Your timeline</span></div>
           <div class="chart-box small"><canvas id="chartCounty"></canvas></div>
+          <div class="state-line hidden" id="cState"></div>
           <div class="section-label">Synthetic residents by age</div>
           <canvas class="pyramid" id="pyramid"></canvas>
           <div class="section-label">Jobs held, by sector (twin, now)</div>
@@ -321,7 +326,7 @@
 
         <div class="card" id="scoreCard">
           <h2>Backtest scoreboard</h2>
-          <div class="sub">Calibrated to 2016 county unemployment, steered only by national data: how well does the twin place the 2020 shock across 3,136 counties? Unlocks when the replay finishes 2020.</div>
+          <div class="sub">Calibrated to 2016 county unemployment, then steered by national and state releases only. No county data after 2016 goes in: how well does the twin place the 2020 shock across 3,136 counties, and inside each state? Unlocks when the replay finishes 2020.</div>
           <div id="scoreBody" class="muted">Waiting for December 2020…</div>
         </div>
 
@@ -340,7 +345,7 @@
       <h2>Welcome to <span>synthetic America</span></h2>
       <p>Every county here is filled with simulated people drawn to match the real county: ages, sexes, races, education, jobs and pay by industry, health, and how the county voted. About one synthetic person stands in for every thousand real ones.</p>
       <div class="steps">
-        <div><b>1 · Watch</b>Replay January 2016 to the latest release. Each month the twin is re-anchored to the real BLS numbers.</div>
+        <div><b>1 · Watch</b>Replay January 2016 to the latest release. Each month the twin is re-anchored to the real BLS numbers for the nation and all 50 states plus DC.</div>
         <div><b>2 · Explore</b>Click a county to meet its residents. Follow one through the pandemic.</div>
         <div><b>3 · Play</b>Fork the timeline and change history: UI policy, sector shocks, regional shocks.</div>
       </div>

@@ -38,6 +38,16 @@ const METRO_LABELS: Record<string, string> = {
   '01073': 'Birmingham', '45019': 'Charleston', '50007': 'Burlington', '23005': 'Portland ME', '33011': 'Manchester',
 };
 
+const STATE_NAMES: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware',
+  DC: 'D.C.', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas',
+  KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota',
+  MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon',
+  PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah',
+  VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+};
+
 interface NewsItem {
   label: string;
   text: string;
@@ -69,6 +79,11 @@ class App {
   scored = false;
   lastRelease = '';
   stateList: string[] = [];
+  /** postal codes of the states the worker steers to, and each county's index into them */
+  steeredStates: string[] | null = null;
+  countyState: Int16Array | null = null;
+  /** 2016 labor force per steered state, to keep small states' noise off the wire */
+  stateLf: Float64Array | null = null;
   signature!: Int8Array;
   chartU!: Chart;
   chartLT!: Chart;
@@ -147,6 +162,15 @@ class App {
         break;
       case 'ready': {
         this.lastRelease = msg.lastRelease;
+        if (msg.states) {
+          this.steeredStates = msg.states;
+          const idx = new Map(msg.states.map((p, i) => [p, i]));
+          this.countyState = Int16Array.from(this.data.counties.state, (p) => idx.get(p) ?? -1);
+          this.stateLf = new Float64Array(msg.states.length);
+          this.countyState.forEach((k, c) => {
+            if (k >= 0) this.stateLf![k] += this.data.counties.lf[c][3] ?? 0;
+          });
+        }
         this.setProgress(`${msg.n.toLocaleString()} synthetic people in ${msg.nc.toLocaleString()} counties, calibrated to BLS county unemployment for 2016. Releases through ${monthName(msg.lastRelease)}.`);
         const go = $('introGo') as HTMLButtonElement;
         go.disabled = false;
@@ -290,6 +314,7 @@ class App {
           { label: 'County', data: [], borderColor: '#4ecdc4' },
           { label: 'Nation', data: [], borderColor: '#6b7487', borderWidth: 1.5 },
           { label: 'Your timeline', data: [], borderColor: '#ff6b6b', hidden: true },
+          { label: 'State (BLS)', data: [], borderColor: '#ffcc00', borderWidth: 1.5, borderDash: [4, 3], hidden: true },
         ],
       },
       options: common,
@@ -319,7 +344,16 @@ class App {
       startU: this.months[0]?.countyU ?? null,
       branchDiff: this.forked ? this.branchDiff() : null,
       backtestError: this.backtestError,
+      stateDemand: this.perCounty(m?.states?.demand),
+      stateU: this.perCounty(m?.states?.twin),
     };
+  }
+
+  /** Spread a per-state array onto counties. */
+  perCounty(v: Float32Array | null | undefined): Float32Array | null {
+    const cs = this.countyState;
+    if (!v || !cs) return null;
+    return Float32Array.from(cs, (k) => (k >= 0 ? v[k] : NaN));
   }
 
   /**
@@ -683,8 +717,34 @@ class App {
       ch.data.datasets[1].data = this.months.map((m) => +(100 * m.national.unemploymentRate).toFixed(2));
       ch.data.datasets[2].data = this.months.map((m) => (m.branch ? +(100 * m.branch.countyU[c]).toFixed(2) : null));
       ch.data.datasets[2].hidden = !this.forked;
+      const k = this.countyState?.[c] ?? -1;
+      ch.data.datasets[3].data = this.months.map((m) => (k >= 0 && m.states?.observed ? +(100 * m.states.observed[k]).toFixed(2) : null));
+      ch.data.datasets[3].hidden = k < 0;
+      $('cKeyState').classList.toggle('hidden', k < 0);
       ch.update('none');
     }
+    this.renderStateLine(c);
+  }
+
+  /** One line under the county chart: the state's release, the twin, and the dial that reconciles them. */
+  renderStateLine(c: number) {
+    const el = $('cState');
+    const k = this.countyState?.[c] ?? -1;
+    const m = this.months[this.months.length - 1];
+    if (k < 0 || !m?.states) {
+      el.classList.add('hidden');
+      return;
+    }
+    const st = this.steeredStates![k];
+    const name = STATE_NAMES[st] ?? st;
+    const obs = m.states.observed?.[k];
+    const dial = m.states.demand?.[k];
+    const dialText =
+      dial == null
+        ? ''
+        : ` · hidden demand <span class="${dial < 1 ? 'neg' : 'pos'}">${dial >= 1 ? '+' : ''}${Math.round(100 * (dial - 1))}%</span> vs. the nation`;
+    el.innerHTML = `<b>${name}</b>: ${obs != null ? `BLS ${pct(obs)} · ` : ''}twin ${pct(m.states.twin[k])}${dialText}`;
+    el.classList.remove('hidden');
   }
 
   renderCounty(det: CountyDetail) {
@@ -860,18 +920,46 @@ class App {
     for (let c = 0; c < delta.length; c++) {
       const b16 = d.lf[c][3] && d.unemp[c][3] != null ? d.unemp[c][3]! / d.lf[c][3]! : t16[c];
       delta[c] = b16 + (t20[c] - t16[c]);
-      err[c] = d.lf[c][4] && d.unemp[c][4] != null ? t20[c] - d.unemp[c][4]! / d.lf[c][4]! : NaN;
+      err[c] = d.lf[c][4] && d.unemp[c][4] != null ? delta[c] - d.unemp[c][4]! / d.lf[c][4]! : NaN;
     }
     this.backtestError = err;
-    const lvl = spatialBacktest(d, t20);
-    const dlt = spatialBacktest(d, delta);
-    const rows = [
-      { name: 'Twin (its own 2020 level)', rmse: lvl.rmse.twin, corr: lvl.changeCorrelation.twin },
-      { name: 'Twin (BLS 2016 + twin change)', rmse: dlt.rmse.twin, corr: dlt.changeCorrelation.twin },
-      { name: 'Naive: uniform national shift', rmse: lvl.rmse.uniform, corr: NaN },
-      { name: 'Naive: proportional scaling', rmse: lvl.rmse.proportional, corr: lvl.changeCorrelation.proportional },
+    const bt = spatialBacktest(d, t20, 2020, 2016, t16);
+    const steered = !!this.steeredStates;
+    type P = keyof typeof bt.rmse;
+    const rows: { name: string; key: P }[] = [
+      { name: 'Twin (BLS 2016 + twin change)', key: 'twinDelta' },
+      { name: 'Twin (its own 2020 level)', key: 'twin' },
+      { name: 'Naive: uniform national shift', key: 'uniform' },
+      { name: 'Naive: proportional scaling', key: 'proportional' },
+      ...(steered
+        ? [
+            { name: 'Naive: shift by own state', key: 'stateShift' as P },
+            { name: 'Naive: scale by own state', key: 'stateProportional' as P },
+          ]
+        : []),
     ];
-    const best = Math.min(...rows.map((r) => r.rmse));
+    const table = (title: string, rmse: Record<P, number>, corr: Record<P, number>, keys: { name: string; key: P }[]) => {
+      const best = Math.min(...keys.map((r) => rmse[r.key]));
+      return `<table class="score">
+        <tr><th>${title}</th><th>RMSE</th><th>Δ corr.</th></tr>
+        ${keys
+          .map((r) => `<tr class="${rmse[r.key] === best ? 'best' : ''}"><td>${r.name}</td><td>${rmse[r.key].toFixed(2)} pts</td><td>${corr[r.key] === 0 ? '—' : corr[r.key].toFixed(2)}</td></tr>`)
+          .join('')}
+      </table>`;
+    };
+    // inside a state, the state shift says every county moved together: the bar to clear
+    const withinKeys = rows
+      .filter((r) => r.key === 'twinDelta' || r.key === 'twin' || r.key === 'stateShift' || r.key === 'stateProportional')
+      .map((r) => (r.key === 'stateShift' ? { ...r, name: 'Naive: all counties move with the state' } : r));
+    const bar = Math.min(bt.withinState.rmse.stateShift, bt.withinState.rmse.stateProportional);
+    const twinWins = bt.withinState.rmse.twinDelta < bar;
+    const finding = steered
+      ? `With the state releases steering it, the twin's error across all counties falls to ${bt.rmse.twinDelta.toFixed(2)} pts. The hard test is inside states, where the twin only knows each county's people and industries. ${
+          twinWins
+            ? `There it beats assuming every county moved with its state (${bt.withinState.rmse.twinDelta.toFixed(2)} vs ${bar.toFixed(2)} pts): the county mix carries real information about who got hit.`
+            : `There it points the right way (change correlation ${bt.withinState.changeCorrelation.twinDelta.toFixed(2)}) but does not yet beat assuming every county moved with its state (${bt.withinState.rmse.twinDelta.toFixed(2)} vs ${bar.toFixed(2)} pts). In the BLS data, density explains about a third of the within-state pattern and the share of residents who are not non-Hispanic white about 30%; the twin gets little of either. That gap is where the next mechanisms go.`
+        }`
+      : 'Steered by national data only, the twin does not beat a uniform shift: the county\'s state explains about half of the 2016→2020 change. Add state releases (pipeline/refresh_states.py) to steer it by state.';
     // urban gradient by county size
     const classes = [
       [0, 5e4, 'under 50k'],
@@ -893,18 +981,16 @@ class App {
       return { name, actual: a / w, twin: t / w };
     });
     $('scoreBody').innerHTML = `
-      <table class="score">
-        <tr><th>Forecast of 2020 county unemployment</th><th>RMSE</th><th>Δ corr.</th></tr>
-        ${rows.map((r) => `<tr class="${r.rmse === best ? 'best' : ''}"><td>${r.name}</td><td>${r.rmse.toFixed(2)} pts</td><td>${Number.isNaN(r.corr) ? '—' : r.corr.toFixed(2)}</td></tr>`).join('')}
-      </table>
+      ${table('Forecast of 2020 county unemployment', bt.rmse, bt.changeCorrelation, rows)}
+      ${steered ? `<div class="section-label">Inside each state (state averages removed)</div>${table('Within-state pattern', bt.withinState.rmse, bt.withinState.changeCorrelation, withinKeys)}` : ''}
       <div class="section-label">Rise in unemployment, 2016 → 2020, by county size</div>
       <table class="score">
         <tr><th>Counties</th><th>BLS</th><th>Twin</th></tr>
         ${grad.map((g) => `<tr><td>${g.name}</td><td>+${(100 * g.actual).toFixed(1)}</td><td>+${(100 * g.twin).toFixed(1)}</td></tr>`).join('')}
       </table>
-      <p class="muted" style="margin-top:8px">Labor-force weighted, ${lvl.counties.toLocaleString()} counties. The twin gets part of the urban gradient from industry mix alone, but it does not beat the naive shift. That is a finding in itself. In the BLS data, the county's state explains about half of the variation in the 2016→2020 change and population density about a third, while industry mix explains about 3%. The pandemic landed by place and policy more than by industry. The next step is to feed the twin monthly state releases. Map layer "Backtest error, 2020" shows where it misses.</p>`;
+      <p class="muted" style="margin-top:8px">Labor-force weighted, ${bt.counties.toLocaleString()} counties. ${finding} Map layer "Backtest error, 2020" shows where it misses.</p>`;
     this.buildLayerSelect();
-    this.pushNews({ label: '2020-12', text: `Scoreboard unlocked: twin RMSE ${dlt.rmse.twin.toFixed(2)} pts vs ${lvl.rmse.uniform.toFixed(2)} for a uniform shift across ${lvl.counties.toLocaleString()} counties.`, kind: 'info' });
+    this.pushNews({ label: '2020-12', text: `Scoreboard unlocked: twin RMSE ${bt.rmse.twinDelta.toFixed(2)} pts vs ${bt.rmse.uniform.toFixed(2)} for a uniform national shift across ${bt.counties.toLocaleString()} counties.`, kind: 'info' });
   }
 
   // ------------------------------------------------------------ the wire
@@ -918,6 +1004,7 @@ class App {
       const dir = o > po ? 'rises' : o < po ? 'falls' : 'holds';
       this.pushNews({ label: m.label, text: `BLS: unemployment ${dir} to ${pct(o)}. The twin infers labor demand at ${(100 * m.demand).toFixed(1)} (Jan 2016 = 100).`, kind: 'release' });
     }
+    this.stateNews(prev, m, o != null && po != null && Math.abs(o - po) >= 0.004);
     const dA = m.demand / prev.demand - 1;
     if (Math.abs(dA) >= 0.04) {
       this.pushNews({ label: m.label, text: `Hidden shock detected: to reproduce this release, labor demand had to ${dA < 0 ? 'fall' : 'rise'} ${Math.abs(100 * dA).toFixed(0)}% in a single month.`, kind: 'release' });
@@ -942,6 +1029,41 @@ class App {
     if (m.branch && prev.branch && m.label.endsWith('-06')) {
       const diff = m.branch.national.unemploymentRate - m.national.unemploymentRate;
       this.pushNews({ label: m.label, text: `Your timeline: unemployment ${pct(m.branch.national.unemploymentRate)}, ${Math.abs(100 * diff).toFixed(1)} pts ${diff >= 0 ? 'above' : 'below'} reality.`, kind: 'branch' });
+    }
+  }
+
+  stateNews(prev: MonthMessage, m: MonthMessage, bigMonth: boolean) {
+    const names = this.steeredStates;
+    const sm = m.states;
+    if (!names || !sm) return;
+    const name = (k: number) => STATE_NAMES[names[k]] ?? names[k];
+    if (bigMonth && sm.observed) {
+      let hi = 0;
+      let lo = 0;
+      sm.observed.forEach((v, k) => {
+        if (v > sm.observed![hi]) hi = k;
+        if (v < sm.observed![lo]) lo = k;
+      });
+      this.pushNews({ label: m.label, text: `State releases: highest unemployment in ${name(hi)} (${pct(sm.observed[hi])}), lowest in ${name(lo)} (${pct(sm.observed[lo])}). The twin matches each state.`, kind: 'release' });
+    }
+    // a big one-month move in a large state's dial is a regional shock the nation alone does not explain
+    if (sm.demand && prev.states?.demand && this.stateLf) {
+      let best = -1;
+      let move = 0;
+      sm.demand.forEach((v, k) => {
+        const dv = v / prev.states!.demand![k] - 1;
+        if (this.stateLf![k] >= 1.5e6 && Math.abs(dv) > Math.abs(move)) {
+          best = k;
+          move = dv;
+        }
+      });
+      if (best >= 0 && Math.abs(move) >= 0.08) {
+        this.pushNews({
+          label: m.label,
+          text: `Hidden state shock: to match ${name(best)}'s release, demand there had to ${move < 0 ? 'fall' : 'rise'} a further ${Math.abs(100 * move).toFixed(0)}% relative to the nation this month.`,
+          kind: 'release',
+        });
+      }
     }
   }
 

@@ -6,6 +6,7 @@ import { Engine, measure } from './engine';
 import { loadTwinDataFromDisk } from './nodeData';
 import { synthesize } from './population';
 import { Simulation } from './simulation';
+import { measureStates, newStateMeasure } from './states';
 import { DEFAULT_POLICY, STATUS, type Drivers } from './world';
 
 let data: TwinData;
@@ -148,6 +149,30 @@ describe('assimilation', () => {
   }, 60_000);
 });
 
+describe('state assimilation', () => {
+  it('pins each state to its BLS release, including Nevada in April 2020', () => {
+    const st = data.releases.states;
+    expect(st, 'state releases are bundled').toBeTruthy();
+    const sim = Simulation.create(data, { scale: 3000, minPerCounty: 40, seed: 9 }, 24);
+    while (sim.nextFrame() && sim.label < '2020-04') sim.step();
+    const apr = sim.history.find((h) => h.label === '2020-04')!;
+    expect(apr.stateError).not.toBeNull();
+    // labor-force-weighted mean gap error under half a point, even in the shock month
+    expect(apr.stateError!).toBeLessThan(0.005);
+    const nv = sim.states!.codes.indexOf('32');
+    const m = measureStates(sim.world, sim.states!, newStateMeasure(sim.states!.n));
+    const twinNV = m.unemployed[nv] / m.laborForce[nv];
+    const blsNV = apr.observed!.stateUnrate![nv];
+    expect(blsNV).toBeGreaterThan(0.2);
+    // the world now holds April's end state
+    expect(Math.abs(twinNV - blsNV)).toBeLessThan(0.02);
+    // and the national rate is still on target
+    expect(Math.abs(apr.stats.unemploymentRate - apr.observed!.unrate!)).toBeLessThan(0.002);
+    // Nevada needed a demand shock beyond the nation's
+    expect(Math.exp(apr.stateLogR![nv])).toBeLessThan(0.9);
+  }, 120_000);
+});
+
 describe('spatial backtest', () => {
   it('scores a perfect forecast at zero error', () => {
     const c = data.counties;
@@ -156,5 +181,8 @@ describe('spatial backtest', () => {
     expect(r.rmse.twin).toBeLessThan(1e-4 * 100);
     expect(r.changeCorrelation.twin).toBeCloseTo(1, 5);
     expect(r.rmse.uniform).toBeGreaterThan(1);
+    expect(r.withinState.rmse.twin).toBeLessThan(1e-2);
+    // a state-wide shift has no within-state variation to correlate
+    expect(r.withinState.changeCorrelation.stateShift).toBe(0);
   });
 });

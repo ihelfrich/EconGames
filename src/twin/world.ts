@@ -31,8 +31,10 @@ export interface Drivers {
   participation: number;
   /** per-sector demand composition, 1 = start mix */
   sector: Float64Array;
-  /** per-county demand multiplier (regional shocks) */
+  /** per-county demand multiplier (state dials and regional shocks) */
   regional: Float64Array;
+  /** per-county labor force multiplier (state dials); absent = 1 everywhere */
+  lfRegional?: Float64Array;
   policy: Policy;
 }
 

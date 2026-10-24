@@ -5,8 +5,9 @@
  */
 import { loadTwinData } from './data';
 import type { MonthStats } from './engine';
-import type { CountyDetail, FromWorker, NationalStats, PersonView, ShockSpec, ToWorker } from './protocol';
+import type { CountyDetail, FromWorker, MonthMessage, NationalStats, PersonView, ShockSpec, ToWorker } from './protocol';
 import { Simulation, type MonthRecord } from './simulation';
+import { measureStates, newStateMeasure, type StateMeasure } from './states';
 import { HEALTH, STATUS, type World } from './world';
 
 const post = (msg: FromWorker, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(msg, transfer);
@@ -14,6 +15,21 @@ const post = (msg: FromWorker, transfer: Transferable[] = []) => (self as unknow
 let sim: Simulation | null = null;
 let branch: Simulation | null = null;
 let followed: number | null = null;
+let stateMeasure: StateMeasure | null = null;
+
+/** The data-steered timeline's state rates this month, the published ones, and the state dials. */
+function stateView(rec: MonthRecord): MonthMessage['states'] {
+  const s = sim!;
+  if (!s.states) return null;
+  const m = measureStates(s.world, s.states, (stateMeasure ??= newStateMeasure(s.states.n)));
+  const twin = Float32Array.from(m.unemployed, (u, k) => (m.laborForce[k] > 0 ? u / m.laborForce[k] : 0));
+  return {
+    twin,
+    observed: rec.observed?.stateUnrate ? Float32Array.from(rec.observed.stateUnrate) : null,
+    demand: rec.stateLogR ? Float32Array.from(rec.stateLogR, Math.exp) : null,
+    error: rec.stateError,
+  };
+}
 
 function national(s: MonthStats): NationalStats {
   return {
@@ -88,6 +104,7 @@ function sendMonth(rec: MonthRecord, brec: MonthRecord | null) {
       branch: brec && bU ? { national: national(brec.stats), countyU: bU } : null,
       followed: followed != null ? person(view.world, followed) : null,
       lastRelease: s.lastReleaseLabel,
+      states: stateView(rec),
     },
     bU ? [countyU.buffer, bU.buffer] : [countyU.buffer],
   );
@@ -155,7 +172,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
         const data = await loadTwinData(async (name) => (await fetch(msg.base + name)).json());
         post({ type: 'progress', message: `Synthesizing ${Math.round(data.counties.pop.reduce((a, b) => a + b, 0) / 1e6)} million Americans…` });
         sim = Simulation.create(data, msg.options);
-        post({ type: 'ready', n: sim.world.n, nc: sim.world.nc, startLabel: sim.label, lastRelease: sim.lastReleaseLabel });
+        post({ type: 'ready', n: sim.world.n, nc: sim.world.nc, startLabel: sim.label, lastRelease: sim.lastReleaseLabel, states: sim.states?.postal ?? null });
         sendMonth(sim.history[0], null);
         break;
       }

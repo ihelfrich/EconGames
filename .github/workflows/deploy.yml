@@ -43,11 +43,14 @@ jobs:
         # never fails the deploy: without FRED the committed snapshot is used
         run: python3 pipeline/refresh_releases.py || true
 
+      - name: Pull the latest state releases (BLS LAUS via BLS or FRED)
+        run: python3 pipeline/refresh_states.py || true
+
       - name: Build twin data
         run: |
           python3 pipeline/build_twin_data.py || {
             echo "Rebuild with the fresh pull failed; falling back to the committed snapshot";
-            rm -f pipeline/snapshots/fred_latest.csv;
+            git checkout -- pipeline/snapshots;
             python3 pipeline/build_twin_data.py;
           }
 

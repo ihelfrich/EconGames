@@ -13,6 +13,10 @@ export interface LayerContext {
   branchDiff: Float32Array | null;
   /** twin 2020 annual average minus BLS 2020, if available */
   backtestError: Float32Array | null;
+  /** per county: its state's solved demand dial this month (1 = moves with the nation), if state data steers the twin */
+  stateDemand: Float32Array | null;
+  /** per county: its state's twin unemployment rate this month */
+  stateU: Float32Array | null;
 }
 
 export interface Layer {
@@ -137,13 +141,33 @@ export function buildLayers(data: CountyData): Layer[] {
       available: (x) => !!x.branchDiff,
     },
     {
+      id: 'statedial',
+      label: 'Hidden state demand',
+      group: 'Live twin',
+      value: (c, x) => (x.stateDemand ? x.stateDemand[c] - 1 : null),
+      scale: { kind: 'diverging', domain: [-0.3, -0.1, 0, 0.1, 0.3], colors: ['#9b2226', '#e76f51', '#46505e', '#5fa8c9', '#2b83ba'] },
+      format: (v) => `${v >= 0 ? '+' : ''}${Math.round(100 * v)}%`,
+      note: "The demand dial the twin had to set for each state so its unemployment matches that state's BLS release, relative to the nation. Red: the data says demand there fell further than the national shock alone explains.",
+      available: (x) => !!x.stateDemand,
+    },
+    {
+      id: 'withinstate',
+      label: 'County vs. its state',
+      group: 'Live twin',
+      value: (c, x) => (x.countyU && x.stateU ? x.countyU[c] - x.stateU[c] : null),
+      scale: { kind: 'diverging', domain: [-0.04, -0.01, 0, 0.01, 0.04], colors: ['#2b83ba', '#5fa8c9', '#46505e', '#e76f51', '#9b2226'] },
+      format: pts,
+      note: "Twin unemployment in each county minus its state's. States are pinned to BLS; this pattern inside each state is the model's own answer.",
+      available: (x) => !!x.stateU,
+    },
+    {
       id: 'backtest',
       label: 'Backtest error, 2020',
       group: 'Live twin',
       value: (c, x) => x.backtestError?.[c] ?? null,
       scale: { kind: 'diverging', domain: [-0.06, -0.02, 0, 0.02, 0.06], colors: ['#2b83ba', '#5fa8c9', '#46505e', '#e76f51', '#9b2226'] },
       format: pts,
-      note: "Twin's 2020 average minus what BLS measured. Red: twin too high; blue: too low.",
+      note: "Twin's 2020 forecast (BLS 2016 plus the twin's change) minus what BLS measured. Red: twin too high; blue: too low.",
       available: (x) => !!x.backtestError,
     },
     {

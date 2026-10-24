@@ -74,6 +74,17 @@ export interface Releases {
   sectorGroups: Record<string, number[]>;
   sectorSeries: Record<string, string>;
   sources: string[];
+  /** monthly state releases (BLS LAUS, seasonally adjusted), aligned with months */
+  states?: StateReleases;
+}
+
+export interface StateReleases {
+  /** two-digit state FIPS codes */
+  codes: string[];
+  /** unemployment rate in percent, [state][month] */
+  unrate: (number | null)[][];
+  /** civilian labor force in persons, [state][month] */
+  laborForce: (number | null)[][];
 }
 
 export interface TwinData {

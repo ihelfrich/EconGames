@@ -111,8 +111,7 @@ def from_fred() -> dict[tuple[str, str], dict[str, float]]:
             text = fetch(FRED_URL.format(sid=sid))
             for row in list(csv.reader(io.StringIO(text)))[1:]:
                 if len(row) >= 2 and row[1] not in ("", "."):
-                    # FRED labor force is in thousands of persons
-                    v = float(row[1]) * (1000 if field == "lf" else 1)
+                    v = float(row[1])
                     out.setdefault((row[0][:7], fips), {})[field] = v
             time.sleep(0.2)
     return out

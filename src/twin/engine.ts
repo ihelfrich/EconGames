@@ -284,6 +284,7 @@ export const Participation: Mechanism = {
   step(ctx) {
     const { world: w, drivers: d } = ctx;
     const P = d.participation;
+    const lfr = d.lfRegional;
     for (let c = 0; c < w.nc; c++) {
       const a = w.countyStart[c];
       const b = w.countyStart[c + 1];
@@ -309,7 +310,7 @@ export const Participation: Mechanism = {
         }
         if (w.status[i] === NILF && w.age[i] < 65) eligibleW += w.age[i] < 25 ? 3 : 1;
       }
-      const gap = (w.lf0[c] / w.weight[c]) * P - lf;
+      const gap = (w.lf0[c] / w.weight[c]) * P * (lfr ? lfr[c] : 1) - lf;
       if (gap > 0 && eligibleW > 0) {
         const base = (PARAMS.participationSpeed * gap) / eligibleW;
         for (let i = a; i < b; i++) {

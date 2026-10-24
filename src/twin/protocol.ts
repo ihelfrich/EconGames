@@ -55,6 +55,8 @@ export interface MonthMessage {
   branch: { national: NationalStats; countyU: Float32Array } | null;
   followed: PersonView | null;
   lastRelease: string;
+  /** per state (order of the ready message's states): twin and published rates, and the solved demand dial */
+  states: { twin: Float32Array; observed: Float32Array | null; demand: Float32Array | null; error: number | null } | null;
 }
 
 export interface PersonView {
@@ -95,7 +97,7 @@ export interface CountyDetail {
 
 export type FromWorker =
   | { type: 'progress'; message: string }
-  | { type: 'ready'; n: number; nc: number; startLabel: string; lastRelease: string }
+  | { type: 'ready'; n: number; nc: number; startLabel: string; lastRelease: string; states: string[] | null }
   | MonthMessage
   | CountyDetail
   | { type: 'residents'; nonce: number; people: PersonView[] }
