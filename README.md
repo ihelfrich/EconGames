@@ -4,6 +4,19 @@
 
 An innovative, world-class interactive economics simulator that brings microeconomic theory to life through engaging gameplay with animated sprites. Built with TypeScript, Phaser 3, and Chart.js.
 
+## New: EconTwin, a living synthetic America
+
+`twin.html` is the first slice of a digital twin of the U.S. economy: 466,000
+synthetic people placed on real county data (age, sex, race, education, jobs and
+pay by industry, health, votes), an agent-based labor market, and a
+data-assimilation loop that re-anchors the twin to every BLS jobs report. You
+watch it on an isometric map, click counties to meet their residents, follow
+one through the pandemic, and fork the timeline to test what-ifs.
+
+- Play: `npm run dev`, then open http://localhost:3000/EconGames/twin.html
+- Check it against history: `npm run twin:backtest`
+- How it works, results, and how to add your own mechanism: [docs/TWIN.md](docs/TWIN.md)
+
 ## Features
 
 ### Market Structures

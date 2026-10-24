@@ -1,0 +1,55 @@
+name: Refresh twin data snapshots
+
+# Pulls the newest national and state releases and commits them to
+# pipeline/snapshots/ on the branch that triggered it, so the data a
+# deploy falls back to never goes stale. Runs when the refresh scripts
+# change, monthly on main, or by hand.
+on:
+  push:
+    paths:
+      - 'pipeline/refresh_*.py'
+      - '.github/workflows/twin-snapshot.yml'
+  schedule:
+    - cron: '0 15 10 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: twin-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      # the map geometry (us-atlas) comes from npm
+      - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pull national releases (FRED)
+        run: python3 pipeline/refresh_releases.py
+      - name: Pull state releases (BLS LAUS, FRED fallback)
+        run: python3 pipeline/refresh_states.py
+      - name: Rebuild twin data from the snapshots
+        run: python3 pipeline/build_twin_data.py
+      - name: Commit changed snapshots
+        run: |
+          git add pipeline/snapshots public/twin-data
+          if git diff --cached --quiet; then
+            echo "Snapshots unchanged."
+            exit 0
+          fi
+          git diff --cached --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refresh twin data snapshots"
+          git push
