@@ -26,20 +26,25 @@ SERIES = [
     "CES1021000001", "USCONS", "MANEMP", "USTPU", "USFIRE", "SRVPRD", "USGOVT",
     "USINFO", "USPBS", "USEHS", "USLAH", "USSERV", "CPIAUCSL", "FEDFUNDS",
 ]
-URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd=2000-01-01"
+# the same data behind two URL forms; some runners get no answer from one of them
+URLS = [
+    "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd=2000-01-01",
+    "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}",
+]
+UA = {"User-Agent": "EconTwin data refresh (https://github.com/ihelfrich/EconGames)"}
 
 
 def pull(sid: str, attempts: int = 3, timeout: int = 60) -> dict[str, str]:
     for attempt in range(attempts):
         try:
-            req = urllib.request.Request(URL.format(sid=sid), headers={"User-Agent": "EconTwin data refresh"})
+            req = urllib.request.Request(URLS[attempt % len(URLS)].format(sid=sid), headers=UA)
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 text = r.read().decode("utf-8")
             rows = list(csv.reader(io.StringIO(text)))
             # header is DATE,<id> or observation_date,<id>
             out = {}
             for row in rows[1:]:
-                if len(row) >= 2 and row[1] not in ("", "."):
+                if len(row) >= 2 and row[1] not in ("", ".") and row[0][:4] >= "2000":
                     float(row[1])
                     out[row[0][:10]] = row[1]
             return out
@@ -51,7 +56,7 @@ def pull(sid: str, attempts: int = 3, timeout: int = 60) -> dict[str, str]:
 
 def main():
     # one quick probe first, so an unreachable FRED costs seconds, not an hour of retries
-    if not pull("UNRATE", attempts=2, timeout=20):
+    if not pull("UNRATE", attempts=4, timeout=30):
         print("FRED unreachable; keeping the committed snapshot.", file=sys.stderr)
         return
     data = {}
