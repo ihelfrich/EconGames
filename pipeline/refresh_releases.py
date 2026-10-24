@@ -25,6 +25,8 @@ SERIES = [
     "UNRATE", "PAYEMS", "CLF16OV", "CE16OV", "UEMPMEAN", "UEMP27OV", "UEMP15OV",
     "CES1021000001", "USCONS", "MANEMP", "USTPU", "USFIRE", "SRVPRD", "USGOVT",
     "USINFO", "USPBS", "USEHS", "USLAH", "USSERV", "CPIAUCSL", "FEDFUNDS",
+    # CPS unemployment rate by race and ethnicity (White, Black, Hispanic, Asian), seasonally adjusted
+    "LNS14000003", "LNS14000006", "LNS14000009", "LNS14032183",
 ]
 # the same data behind two URL forms; some runners get no answer from one of them
 URLS = [
