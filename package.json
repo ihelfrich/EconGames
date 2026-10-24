@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "twin:data": "python3 pipeline/build_twin_data.py",
+    "twin:refresh": "python3 pipeline/refresh_releases.py && python3 pipeline/build_twin_data.py",
+    "twin:backtest": "vite-node scripts/twin-backtest.ts"
   },
   "keywords": [
     "economics",
@@ -21,7 +25,9 @@
   "devDependencies": {
     "@types/node": "^20.11.5",
     "typescript": "^5.3.3",
-    "vite": "^5.0.11"
+    "us-atlas": "^3.0.1",
+    "vite": "^5.0.11",
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "chart.js": "^4.4.1",

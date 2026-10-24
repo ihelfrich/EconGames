@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EconTwin: a living synthetic America. 466,000 simulated people on real county data, steered month by month by real BLS releases.">
+  <meta name="author" content="Dr. Ian Helfrich">
+  <title>EconTwin · Synthetic America</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cardinal: #990000;
+      --cardinal-bright: #d42a2a;
+      --gold: #ffcc00;
+      --bg: #070b14;
+      --panel: rgba(16, 22, 36, 0.92);
+      --panel-solid: #101624;
+      --panel-2: #172033;
+      --line: rgba(255, 255, 255, 0.08);
+      --ink: #f2efe8;
+      --ink-2: #b8bfcc;
+      --ink-3: #7d8697;
+      --real: #ffcc00;
+      --twin: #4ecdc4;
+      --branch: #ff6b6b;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      overflow: hidden;
+    }
+    button, select, input { font: inherit; color: inherit; }
+    a { color: var(--gold); }
+
+    .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+
+    /* ------------------------------------------------ header */
+    header {
+      display: flex; align-items: center; gap: 18px;
+      padding: 10px 18px;
+      background: linear-gradient(90deg, #12060a 0%, #0c1220 60%);
+      border-bottom: 1px solid var(--line);
+      z-index: 5;
+    }
+    .brand { display: flex; flex-direction: column; min-width: 0; }
+    .brand h1 { font-family: 'Fraunces', serif; font-size: 22px; letter-spacing: 0.3px; line-height: 1.05; }
+    .brand h1 span { color: var(--gold); }
+    .brand small { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+    .clock { margin-left: auto; text-align: right; }
+    .clock .date { font-family: 'Fraunces', serif; font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; }
+    .clock .mode { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-2); margin-top: 3px; }
+    .clock .mode b { color: var(--twin); font-weight: 600; }
+    .clock .mode.forecast b { color: #c39bff; }
+    .transport { display: flex; align-items: center; gap: 6px; }
+    .btn {
+      background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+      padding: 7px 12px; cursor: pointer; font-size: 13px; font-weight: 600;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover { background: #222d45; border-color: rgba(255,255,255,0.18); }
+    .btn.primary { background: var(--cardinal); border-color: var(--cardinal-bright); }
+    .btn.primary:hover { background: var(--cardinal-bright); }
+    .btn.gold { background: var(--gold); color: #1a1200; border-color: var(--gold); }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .seg button { background: transparent; border: 0; padding: 7px 10px; font-size: 12px; cursor: pointer; color: var(--ink-2); }
+    .seg button.on { background: #24304a; color: var(--ink); }
+    .home-link { font-size: 12px; color: var(--ink-3); text-decoration: none; white-space: nowrap; }
+    .home-link:hover { color: var(--ink); }
+
+    /* ------------------------------------------------ body */
+    .body { display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
+    .stage { position: relative; min-width: 0; min-height: 0; }
+    #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+    #map.dragging { cursor: grabbing; }
+
+    .float { position: absolute; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); backdrop-filter: blur(8px); }
+    .layer-box { top: 14px; left: 14px; padding: 12px; width: 270px; }
+    .layer-box label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-3); display: block; margin-bottom: 6px; }
+    .layer-box select { width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+    .layer-note { font-size: 12px; color: var(--ink-2); margin-top: 8px; line-height: 1.35; }
+    .legend { margin-top: 10px; }
+    .legend .bar { height: 10px; border-radius: 5px; }
+    .legend .ticks { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+    .legend .cats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; font-size: 11px; color: var(--ink-2); }
+    .legend .cats span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; background: var(--c); vertical-align: -1px; }
+    .height-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+
+    .news { left: 14px; bottom: 14px; width: min(460px, calc(100% - 28px)); max-height: 34%; overflow: hidden; padding: 10px 12px; }
+    .news h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-3); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .news ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .news li { font-size: 12.5px; line-height: 1.35; color: var(--ink-2); animation: slidein 0.35s ease-out; cursor: default; }
+    .news li[data-county] { cursor: pointer; }
+    .news li[data-county]:hover { color: var(--ink); }
+    .news li time { color: var(--gold); font-variant-numeric: tabular-nums; margin-right: 6px; font-weight: 600; }
+    .news li.policy { color: #c9b8ff; }
+    .news li.release { color: var(--ink); }
+    @keyframes slidein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .map-tools { right: 14px; top: 14px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+    .map-tools button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font-size: 15px; }
+    .map-tools button:hover { background: #222d45; }
+
+    .tooltip { position: absolute; pointer-events: none; padding: 8px 10px; font-size: 12px; background: rgba(8,12,20,0.95); border: 1px solid var(--line); border-radius: 10px; transform: translate(14px, 14px); white-space: nowrap; display: none; z-index: 4; }
+    .tooltip b { font-size: 13px; }
+    .tooltip .v { color: var(--gold); font-weight: 600; }
+
+    /* ------------------------------------------------ sidebar */
+    aside { background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+    .card { background: #131b2c; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+    .card h2 { font-family: 'Fraunces', serif; font-size: 17px; margin-bottom: 2px; }
+    .card .sub { font-size: 12px; color: var(--ink-3); margin-bottom: 10px; line-height: 1.4; }
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+    .kpi { background: #0e1524; border-radius: 10px; padding: 8px; }
+    .kpi .k { font-size: 10.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.7px; }
+    .kpi .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+    .kpi .s { font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+    .chart-box { position: relative; height: 170px; }
+    .chart-box.small { height: 120px; }
+    .key { display: flex; gap: 12px; font-size: 11px; color: var(--ink-2); margin: 6px 0 4px; flex-wrap: wrap; }
+    .key span::before { content: ''; display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--c); vertical-align: 3px; margin-right: 5px; }
+    .muted { color: var(--ink-3); font-size: 12px; line-height: 1.45; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .grow { flex: 1; }
+
+    .shock { display: grid; grid-template-columns: 1fr 70px; gap: 4px 10px; align-items: center; margin: 8px 0; font-size: 12.5px; }
+    .shock select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; width: 100%; }
+    .shock input[type=range] { grid-column: 1 / 3; accent-color: var(--branch); }
+    .shock output { text-align: right; font-variant-numeric: tabular-nums; color: var(--branch); font-weight: 600; }
+
+    .bars { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+    .bars .b { display: grid; grid-template-columns: 130px 1fr 52px; gap: 6px; align-items: center; font-size: 11.5px; color: var(--ink-2); }
+    .bars .b i { display: block; height: 8px; border-radius: 4px; background: var(--c, #4ecdc4); }
+    .bars .b em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+    .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-3); margin: 12px 0 4px; }
+    canvas.pyramid { width: 100%; height: 130px; display: block; }
+
+    .resident { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 12px; }
+    .resident .face { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; background: #1d2840; }
+    .resident .who { color: var(--ink); font-weight: 600; }
+    .resident .what { color: var(--ink-3); }
+    .resident button { font-size: 11px; padding: 4px 8px; }
+    .life { list-style: none; font-size: 12px; display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 180px; overflow-y: auto; }
+    .life time { color: var(--gold); margin-right: 6px; font-variant-numeric: tabular-nums; }
+
+    table.score { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+    table.score td, table.score th { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+    table.score th { color: var(--ink-3); font-weight: 500; font-size: 11px; }
+    table.score td:first-child, table.score th:first-child { text-align: left; }
+    table.score tr.best td { color: var(--gold); font-weight: 600; }
+
+    details summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+    details ul { margin: 8px 0 0 16px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+
+    /* ------------------------------------------------ intro */
+    .intro { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(1200px 700px at 50% 40%, rgba(20,30,50,0.85), rgba(4,6,12,0.97)); z-index: 20; padding: 16px; }
+    .intro .box { max-width: 620px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 20px; padding: 28px; box-shadow: 0 30px 80px rgba(0,0,0,0.5); }
+    .intro h2 { font-family: 'Fraunces', serif; font-size: 30px; margin-bottom: 10px; }
+    .intro h2 span { color: var(--gold); }
+    .intro p { color: var(--ink-2); line-height: 1.55; margin-bottom: 12px; font-size: 15px; }
+    .intro .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0 20px; }
+    .intro .steps div { background: #131b2c; border-radius: 12px; padding: 10px; font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+    .intro .steps b { display: block; color: var(--ink); font-size: 13px; margin-bottom: 3px; }
+    .intro .progress { font-size: 13px; color: var(--ink-3); margin-top: 12px; min-height: 18px; }
+    .intro .go { display: flex; gap: 10px; align-items: center; }
+    .hidden { display: none !important; }
+
+    @media (max-width: 980px) {
+      body { overflow: auto; }
+      .app { height: auto; }
+      .body { grid-template-columns: 1fr; }
+      .stage { height: 72vh; }
+      aside { border-left: 0; border-top: 1px solid var(--line); }
+      .layer-box { width: 200px; padding: 10px; }
+      .layer-note, .height-row { display: none; }
+      .legend .cats { grid-template-columns: 1fr; }
+      .news { max-height: 28%; }
+      header { flex-wrap: wrap; }
+      .intro .steps { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <h1>Econ<span>Twin</span></h1>
+        <small>A living synthetic America · Dr. Ian Helfrich</small>
+      </div>
+      <div class="transport">
+        <button class="btn primary" id="play" disabled>▶ Play</button>
+        <button class="btn" id="stepBtn" title="Advance one month" disabled>+1 mo</button>
+        <div class="seg" id="speed">
+          <button data-ms="900">1×</button>
+          <button data-ms="350" class="on">3×</button>
+          <button data-ms="0">Max</button>
+        </div>
+        <button class="btn" id="restart" title="Rebuild the population and start again" disabled>↺</button>
+      </div>
+      <div class="clock">
+        <div class="date" id="date">—</div>
+        <div class="mode" id="mode">Loading</div>
+      </div>
+      <a class="home-link" href="./">← Market games</a>
+    </header>
+
+    <div class="body">
+      <section class="stage">
+        <canvas id="map" aria-label="Isometric map of U.S. counties"></canvas>
+        <div class="float layer-box">
+          <label for="layer">Map layer</label>
+          <select id="layer"></select>
+          <div class="legend" id="legend"></div>
+          <div class="layer-note" id="layerNote"></div>
+          <div class="height-row">
+            Height
+            <div class="seg" id="heightMode">
+              <button data-h="density" class="on">Density</button>
+              <button data-h="population">People</button>
+              <button data-h="flat">Flat</button>
+            </div>
+          </div>
+        </div>
+        <div class="float map-tools">
+          <button id="rotL" title="Rotate left (Q)">⟲</button>
+          <button id="rotR" title="Rotate right (E)">⟳</button>
+          <button id="zoomIn" title="Zoom in">＋</button>
+          <button id="zoomOut" title="Zoom out">－</button>
+          <button id="fit" title="Whole country">⌂</button>
+        </div>
+        <div class="float news">
+          <h3><span>Twin wire</span><span id="newsCount"></span></h3>
+          <ul id="news"></ul>
+        </div>
+        <div class="tooltip" id="tooltip"></div>
+      </section>
+
+      <aside>
+        <div class="card" id="nationCard">
+          <h2>The nation</h2>
+          <div class="sub">Each month the twin reads the real BLS release and solves for the hidden labor demand and labor force that reproduce it. Counties are left to the model.</div>
+          <div class="kpis">
+            <div class="kpi"><div class="k">Unemployment</div><div class="v" id="kU">—</div><div class="s" id="kUreal">BLS —</div></div>
+            <div class="kpi"><div class="k">Labor demand</div><div class="v" id="kA">—</div><div class="s">inferred, Jan 2016 = 100</div></div>
+            <div class="kpi"><div class="k">Long-term unemp.</div><div class="v" id="kLT">—</div><div class="s" id="kLTreal">BLS —</div></div>
+          </div>
+          <div class="key"><span style="--c: var(--real)">BLS release</span><span style="--c: var(--twin)">Twin</span><span style="--c: var(--branch)" id="keyBranch" class="hidden">Your timeline</span></div>
+          <div class="chart-box"><canvas id="chartU"></canvas></div>
+          <div class="section-label">Untargeted check: share unemployed 27+ weeks</div>
+          <div class="chart-box small"><canvas id="chartLT"></canvas></div>
+          <div class="muted" style="margin-top:6px">The twin never sees this series. Duration behavior was calibrated on 2016–2019 only, so 2020–2023 is out of sample.</div>
+        </div>
+
+        <div class="card" id="whatIf">
+          <h2>What if…</h2>
+          <div class="sub">Fork the timeline. Your branch replays the same data-inferred shocks as reality, plus your changes, with the same random draws, so every difference is caused by your change.</div>
+          <div id="forkIdle">
+            <button class="btn gold" id="forkBtn" disabled>⑂ Fork the timeline here</button>
+            <div class="muted" style="margin-top:8px">Try forking in March 2020 and turning off the pandemic UI expansion, or doubling the hit to leisure &amp; hospitality.</div>
+          </div>
+          <div id="forkLive" class="hidden">
+            <div class="shock">
+              <span>Aggregate demand</span><output id="oDemand">0%</output>
+              <input type="range" id="sDemand" min="-30" max="30" step="1" value="0">
+            </div>
+            <div class="shock">
+              <select id="sectorPick"></select><output id="oSector">0%</output>
+              <input type="range" id="sSector" min="-60" max="60" step="1" value="0">
+            </div>
+            <div class="shock">
+              <select id="statePick"></select><output id="oState">0%</output>
+              <input type="range" id="sState" min="-40" max="40" step="1" value="0">
+            </div>
+            <div class="shock">
+              <span>Unemployment insurance</span><span></span>
+              <select id="policyPick" style="grid-column: 1 / 3">
+                <option value="actual">As it actually happened</option>
+                <option value="none">No pandemic UI expansion (6 months, no supplement)</option>
+                <option value="generous">Generous: 18 months, large supplement</option>
+                <option value="jobsearch">Job-search help: +25% matching efficiency</option>
+              </select>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <div class="grow muted" id="forkInfo"></div>
+              <button class="btn" id="unforkBtn">Merge back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden" id="countyCard">
+          <div class="row"><h2 class="grow" id="cName">County</h2><button class="btn" id="cClose" title="Close">✕</button></div>
+          <div class="sub" id="cSub"></div>
+          <div class="kpis">
+            <div class="kpi"><div class="k">Twin unemp.</div><div class="v" id="cU">—</div><div class="s" id="cUstart"></div></div>
+            <div class="kpi"><div class="k">BLS 2020</div><div class="v" id="cU20">—</div><div class="s" id="cU16"></div></div>
+            <div class="kpi"><div class="k">Avg pay</div><div class="v" id="cPay">—</div><div class="s" id="cPaySub"></div></div>
+          </div>
+          <div class="key"><span style="--c: var(--twin)">This county</span><span style="--c: #6b7487">Nation</span><span style="--c: var(--branch)" id="cKeyBranch" class="hidden">Your timeline</span></div>
+          <div class="chart-box small"><canvas id="chartCounty"></canvas></div>
+          <div class="section-label">Synthetic residents by age</div>
+          <canvas class="pyramid" id="pyramid"></canvas>
+          <div class="section-label">Jobs held, by sector (twin, now)</div>
+          <div class="bars" id="cSectors"></div>
+          <div class="section-label">Who lives here</div>
+          <div class="bars" id="cPeople"></div>
+          <div class="section-label row"><span class="grow">Meet the residents</span><button class="btn" id="cShuffle" style="font-size:11px;padding:3px 8px">Shuffle</button></div>
+          <div id="cResidents"></div>
+        </div>
+
+        <div class="card hidden" id="followCard">
+          <div class="row"><h2 class="grow">Following</h2><button class="btn" id="unfollow" title="Stop following">✕</button></div>
+          <div class="sub" id="followWho"></div>
+          <ul class="life" id="life"></ul>
+        </div>
+
+        <div class="card" id="scoreCard">
+          <h2>Backtest scoreboard</h2>
+          <div class="sub">Calibrated to 2016 county unemployment, steered only by national data: how well does the twin place the 2020 shock across 3,136 counties? Unlocks when the replay finishes 2020.</div>
+          <div id="scoreBody" class="muted">Waiting for December 2020…</div>
+        </div>
+
+        <div class="card">
+          <details>
+            <summary>How this works &amp; data sources</summary>
+            <ul id="sources"></ul>
+          </details>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="intro" id="intro">
+    <div class="box">
+      <h2>Welcome to <span>synthetic America</span></h2>
+      <p>Every county here is filled with simulated people drawn to match the real county: ages, sexes, races, education, jobs and pay by industry, health, and how the county voted. About one synthetic person stands in for every thousand real ones.</p>
+      <div class="steps">
+        <div><b>1 · Watch</b>Replay January 2016 to the latest release. Each month the twin is re-anchored to the real BLS numbers.</div>
+        <div><b>2 · Explore</b>Click a county to meet its residents. Follow one through the pandemic.</div>
+        <div><b>3 · Play</b>Fork the timeline and change history: UI policy, sector shocks, regional shocks.</div>
+      </div>
+      <div class="go">
+        <button class="btn primary" id="introGo" disabled>Building the population…</button>
+        <span class="muted">Space: play/pause · Q/E: rotate · drag to pan · scroll to zoom</span>
+      </div>
+      <div class="progress" id="progress">Loading…</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/twin/ui/app.ts"></script>
+</body>
+</html>

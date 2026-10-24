@@ -4,3 +4,5 @@ dist
 *.log
 .vite
 .cache
+pipeline/.cache
+__pycache__
