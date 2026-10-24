@@ -154,10 +154,15 @@ export function buildLayers(data: CountyData): Layer[] {
       id: 'withinstate',
       label: 'County vs. its state',
       group: 'Live twin',
-      value: (c, x) => (x.countyU && x.stateU ? x.countyU[c] - x.stateU[c] : null),
+      value: (c, x) => {
+        if (!x.countyU || !x.stateU) return null;
+        // shrink small counties toward their state: a few dozen agents make them noisy
+        const workers = Math.max(80, data.pop[c] / 1000) * 0.5;
+        return (x.countyU[c] - x.stateU[c]) * (workers / (workers + 60));
+      },
       scale: { kind: 'diverging', domain: [-0.04, -0.01, 0, 0.01, 0.04], colors: ['#2b83ba', '#5fa8c9', '#46505e', '#e76f51', '#9b2226'] },
       format: pts,
-      note: "Twin unemployment in each county minus its state's. States are pinned to BLS; this pattern inside each state is the model's own answer.",
+      note: "Twin unemployment in each county minus its state's, with small counties shrunk toward zero. States are pinned to BLS; the pattern inside each state is the model's own answer.",
       available: (x) => !!x.stateU,
     },
     {

@@ -258,7 +258,12 @@
           <div class="chart-box"><canvas id="chartU"></canvas></div>
           <div class="section-label">Untargeted check: share unemployed 27+ weeks</div>
           <div class="chart-box small"><canvas id="chartLT"></canvas></div>
-          <div class="muted" style="margin-top:6px">The twin never sees this series. Duration behavior was calibrated on 2016–2019 only, so 2020–2023 is out of sample.</div>
+          <div class="muted" style="margin-top:6px">The twin never sees this series. Duration behavior was calibrated on 2016–2019 only, so 2020 onward is out of sample.</div>
+          <div class="hidden" id="raceBox">
+            <div class="section-label">Who is unemployed: by race and ethnicity</div>
+            <table class="score" id="raceTable"></table>
+            <div class="muted" style="margin-top:6px">CPS publishes these monthly. The twin steers one dial per group (how likely its members are to lose a job and how slowly they find one) to match. Risk is relative to the labor-force average. CPS counts Hispanics of any race; the twin's groups do not overlap.</div>
+          </div>
         </div>
 
         <div class="card" id="whatIf">

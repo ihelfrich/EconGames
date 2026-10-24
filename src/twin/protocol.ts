@@ -57,6 +57,8 @@ export interface MonthMessage {
   lastRelease: string;
   /** per state (order of the ready message's states): twin and published rates, and the solved demand dial */
   states: { twin: Float32Array; observed: Float32Array | null; demand: Float32Array | null; error: number | null } | null;
+  /** per race (meta.races order): twin rate, CPS rate (NaN where not published) and the incidence dial */
+  race: { twin: number[]; observed: number[] | null; risk: number[] } | null;
 }
 
 export interface PersonView {

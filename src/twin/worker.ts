@@ -105,6 +105,13 @@ function sendMonth(rec: MonthRecord, brec: MonthRecord | null) {
       followed: followed != null ? person(view.world, followed) : null,
       lastRelease: s.lastReleaseLabel,
       states: stateView(rec),
+      race: rec.raceRisk
+        ? {
+            twin: Array.from(rec.raceRates ?? s.assim.race.rates()),
+            observed: rec.observed?.raceUnrate ? Array.from(rec.observed.raceUnrate) : null,
+            risk: Array.from(rec.raceRisk),
+          }
+        : null,
     },
     bU ? [countyU.buffer, bU.buffer] : [countyU.buffer],
   );

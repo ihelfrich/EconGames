@@ -421,6 +421,13 @@ def build_releases():
         "fedfunds": col("FEDFUNDS"),
         "sectorGroups": groups,
         "sectorSeries": used,
+        # CPS unemployment rate (%) by race and ethnicity; Hispanics may be of any race
+        "raceUnrate": {
+            "white": col("LNS14000003"),
+            "black": col("LNS14000006"),
+            "hispanic": col("LNS14000009"),
+            "asian": col("LNS14032183"),
+        },
         "sources": sorted(set(sources.values())),
     }
     states = build_state_releases(months)

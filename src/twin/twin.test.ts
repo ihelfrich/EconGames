@@ -150,7 +150,7 @@ describe('assimilation', () => {
 });
 
 describe('state assimilation', () => {
-  it('pins each state to its BLS release, including Nevada in April 2020', () => {
+  it('pins each state to its BLS release, including Nevada in April 2020, and each group to CPS', () => {
     const st = data.releases.states;
     expect(st, 'state releases are bundled').toBeTruthy();
     const sim = Simulation.create(data, { scale: 3000, minPerCounty: 40, seed: 9 }, 24);
@@ -170,6 +170,8 @@ describe('state assimilation', () => {
     expect(Math.abs(apr.stats.unemploymentRate - apr.observed!.unrate!)).toBeLessThan(0.002);
     // Nevada needed a demand shock beyond the nation's
     expect(Math.exp(apr.stateLogR![nv])).toBeLessThan(0.9);
+    // CPS race gaps are carried too: Black and Hispanic unemployment within a point of CPS
+    for (const g of [1, 3]) expect(Math.abs(apr.raceRates![g] - apr.observed!.raceUnrate![g])).toBeLessThan(0.01);
   }, 120_000);
 });
 

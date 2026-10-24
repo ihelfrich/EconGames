@@ -48,6 +48,24 @@ if (st.length) {
   );
 }
 
+const races = sim.history.filter((h) => h.observed?.raceUnrate && ['2016-06', '2020-04', '2021-01', '2024-01'].includes(h.label));
+if (races.length) {
+  console.log('\nunemployment by race (CPS vs twin; race incidence is steered):');
+  console.log('  month    Black(CPS) twin   Asian(CPS) twin   Hispanic(CPS) twin   risk B/A/H');
+  for (const h of races) {
+    const o = h.observed!.raceUnrate!;
+    const t = h.raceRates!;
+    const r = h.raceRisk!;
+    console.log(`  ${h.label}   ${pct(o[1])}  ${pct(t[1])}    ${pct(o[2])}  ${pct(t[2])}    ${pct(o[3])}     ${pct(t[3])}     ${r[1].toFixed(2)}/${r[2].toFixed(2)}/${r[3].toFixed(2)}`);
+  }
+}
+
+const raceMonths = sim.history.filter((h) => h.raceRates && h.observed?.raceUnrate);
+if (raceMonths.length) {
+  const mae = (g: number) => (100 * raceMonths.reduce((a, h) => a + Math.abs(h.raceRates![g] - h.observed!.raceUnrate![g]), 0)) / raceMonths.length;
+  console.log(`race tracking, mean abs error: Black ${mae(1).toFixed(2)} pp, Asian ${mae(2).toFixed(2)} pp, Hispanic ${mae(3).toFixed(2)} pp`);
+}
+
 const rate2020 = sim.annualCountyRate(2020);
 const rate2016 = sim.annualCountyRate(2016);
 if (rate2020) {

@@ -74,6 +74,8 @@ export interface Releases {
   sectorGroups: Record<string, number[]>;
   sectorSeries: Record<string, string>;
   sources: string[];
+  /** CPS unemployment rate (%) by race and ethnicity, aligned with months */
+  raceUnrate?: Record<'white' | 'black' | 'hispanic' | 'asian', (number | null)[]>;
   /** monthly state releases (BLS LAUS, seasonally adjusted), aligned with months */
   states?: StateReleases;
 }

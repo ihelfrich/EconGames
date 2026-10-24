@@ -177,7 +177,7 @@ function rebirth(w: World, i: number, raceCdf: Float64Array, u1: number, u2: num
 export const LaborDemand: Mechanism = {
   id: 'labor-demand',
   label: 'Labor demand & separations',
-  summary: 'Each county-sector wants L0 x aggregate demand x sector mix x regional shock workers. Jobs end at sector-specific rates, plus layoffs that close part of any excess of workers over demand.',
+  summary: 'Each county-sector wants L0 x aggregate demand x sector mix x regional shock workers. Jobs end at sector-specific rates, plus layoffs that close part of any excess of workers over demand. The race-incidence dial scales who is laid off.',
   step(ctx) {
     const { world: w, drivers: d } = ctx;
     const ns = w.ns;
@@ -195,10 +195,11 @@ export const LaborDemand: Mechanism = {
         layoff[k] = Math.min(0.95, PARAMS.separation[s] + PARAMS.layoffSpeed * excess);
       }
     }
+    const rr = d.raceRisk;
     for (let i = 0; i < w.n; i++) {
       if (w.status[i] !== EMPLOYED) continue;
       const k = w.county[i] * ns + w.sector[i];
-      if (uniform(ctx.key, i, 2) < layoff[k]) {
+      if (uniform(ctx.key, i, 2) < (rr ? Math.min(0.95, layoff[k] * rr[w.race[i]]) : layoff[k])) {
         w.status[i] = UNEMPLOYED;
         w.dur[i] = 0;
         w.tenure[i] = 0;
@@ -212,11 +213,12 @@ export const LaborDemand: Mechanism = {
 export const Matching: Mechanism = {
   id: 'matching',
   label: 'Search & matching',
-  summary: 'Each county is a local labor market. Hires follow a Cobb-Douglas matching function M = mu U^a V^(1-a); search effort falls with unemployment duration and while on UI; workers prefer openings in their previous sector.',
+  summary: 'Each county is a local labor market. Hires follow a Cobb-Douglas matching function M = mu U^a V^(1-a); search effort falls with unemployment duration and while on UI; workers prefer openings in their previous sector. The race-incidence dial scales who is hired.',
   step(ctx) {
     const { world: w, drivers: d } = ctx;
     const ns = w.ns;
     const pol = d.policy ?? DEFAULT_POLICY;
+    const rr = d.raceRisk;
     const vac = new Float64Array(ns);
     for (let c = 0; c < w.nc; c++) {
       const a = w.countyStart[c];
@@ -237,7 +239,7 @@ export const Matching: Mechanism = {
       for (let i = a; i < b; i++) {
         if (w.status[i] !== UNEMPLOYED) continue;
         U++;
-        effort += searchEffort(w.dur[i], w.edu[i], pol);
+        effort += searchEffort(w.dur[i], w.edu[i], pol) / (rr ? rr[w.race[i]] : 1);
       }
       if (U === 0 || gap <= 0) continue;
       const M = Math.min(0.9 * U, gap, w.mu[c] * pol.matchBoost * Math.pow(U, PARAMS.alpha) * Math.pow(V, 1 - PARAMS.alpha));
@@ -245,7 +247,7 @@ export const Matching: Mechanism = {
       const wt = w.weight[c];
       for (let i = a; i < b; i++) {
         if (w.status[i] !== UNEMPLOYED) continue;
-        if (uniform(ctx.key, i, 3) >= scale * searchEffort(w.dur[i], w.edu[i], pol)) continue;
+        if (uniform(ctx.key, i, 3) >= (scale * searchEffort(w.dur[i], w.edu[i], pol)) / (rr ? rr[w.race[i]] : 1)) continue;
         // choose an opening, favoring the worker's previous sector
         const prev = w.sector[i];
         let tot = 0;
@@ -386,7 +388,7 @@ export class Engine {
    * county's matching efficiency until its unemployment rate settles at the
    * BLS target. Mirrors how climate models are spun up before a forecast.
    */
-  spinup(world: World, drivers: Drivers, months = 36): MonthStats {
+  spinup(world: World, drivers: Drivers, months = 36, onMonth?: (world: World, month: number) => void): MonthStats {
     // analytic first guess from the steady state u = s / (s + f)
     for (let c = 0; c < world.nc; c++) {
       const u = world.uTarget[c];
@@ -396,6 +398,7 @@ export class Engine {
     let stats = measure(world, 0, 0);
     for (let m = 0; m < months; m++) {
       stats = this.step(world, drivers, { spinup: true, streamOffset: 1000 + m });
+      onMonth?.(world, m);
       const gain = m < months - 6 ? 0.6 : 0.25;
       for (let c = 0; c < world.nc; c++) {
         const u = stats.countyU[c];

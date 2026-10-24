@@ -35,6 +35,11 @@ export interface Drivers {
   regional: Float64Array;
   /** per-county labor force multiplier (state dials); absent = 1 everywhere */
   lfRegional?: Float64Array;
+  /**
+   * per race (meta.races order): multiplies the chance of losing a job and
+   * divides the chance of finding one; absent = 1 for everyone
+   */
+  raceRisk?: Float64Array;
   policy: Policy;
 }
 

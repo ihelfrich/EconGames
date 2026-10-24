@@ -18,7 +18,7 @@
 import type { Releases, SectorMeta } from './data';
 import type { Engine, MonthStats } from './engine';
 import { newStateMeasure, measureStates, type StateMap, type StateMeasure } from './states';
-import { DEFAULT_POLICY, type Policy, World } from './world';
+import { DEFAULT_POLICY, type Policy, STATUS, World } from './world';
 
 export interface ReleaseFrame {
   label: string;
@@ -38,6 +38,35 @@ export interface ReleaseFrame {
   stateLfRatio: Float64Array | null;
   /** per state: published unemployment rate (share), for charts */
   stateUnrate: Float64Array | null;
+  /**
+   * per twin race (meta.races order): CPS unemployment rate minus the
+   * national rate (share); NaN for groups CPS does not publish on the twin's
+   * definitions (non-Hispanic white, other)
+   */
+  raceGap: Float64Array | null;
+  /** per twin race: CPS unemployment rate (share), NaN where not published */
+  raceUnrate: Float64Array | null;
+}
+
+/** Twin race index -> CPS series. CPS counts Hispanics of any race; the twin's groups are exclusive. */
+export const RACE_TARGETS: { race: number; key: 'black' | 'asian' | 'hispanic' }[] = [
+  { race: 1, key: 'black' },
+  { race: 2, key: 'asian' },
+  { race: 3, key: 'hispanic' },
+];
+
+function raceFrame(releases: Releases, i: number) {
+  const r = releases.raceUnrate;
+  const u = releases.unrate[i];
+  if (!r || u == null) return { raceGap: null, raceUnrate: null };
+  const rate = new Float64Array(5).fill(NaN);
+  for (const t of RACE_TARGETS) {
+    const v = r[t.key][i];
+    if (v == null) return { raceGap: null, raceUnrate: null };
+    rate[t.race] = v / 100;
+  }
+  if (r.white[i] != null) rate[0] = r.white[i]! / 100;
+  return { raceGap: rate.map((x, g) => (g === 0 || Number.isNaN(x) ? NaN : x - u / 100)), raceUnrate: rate };
 }
 
 function stateFrame(releases: Releases, i: number, i0: number) {
@@ -95,6 +124,7 @@ export function buildFrames(releases: Releases, sectors: SectorMeta[], startLabe
       meanDurationWeeks: releases.meanDuration[i],
       payems: pay,
       ...stateFrame(releases, i, i0),
+      ...raceFrame(releases, i),
     });
   }
   return frames;
@@ -134,6 +164,7 @@ export interface AssimilationResult {
 const BOUNDS = { logA: [-0.9, 0.5], P: [0.85, 1.15], logR: [-1.2, 1.2], logQ: [-0.3, 0.3] } as const;
 const TOL = 0.0006;
 const STATE_TOL = 0.0015;
+const RACE_TOL = 0.002;
 const MAX_EVALS = 7;
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
@@ -250,6 +281,103 @@ class StateSolver {
   }
 }
 
+/**
+ * Who bears unemployment. One incidence dial per race group (relative to
+ * non-Hispanic white) scales the chance of losing a job and divides the
+ * chance of finding one, solved so each group's unemployment gap to the
+ * national rate matches CPS. The dials are re-scaled so the labor-force
+ * average multiplier stays 1, so the national dials keep their meaning.
+ */
+class RaceSolver {
+  /** log dials relative to non-Hispanic white */
+  readonly x = new Float64Array(5);
+  /** applied multipliers, normalized */
+  readonly risk = new Float64Array(5).fill(1);
+  readonly e = new Float64Array(5);
+  private slope = new Float64Array(5).fill(0.08);
+  private prevX = new Float64Array(5);
+  private prevE = new Float64Array(5).fill(NaN);
+  private un = new Float64Array(5);
+  private lf = new Float64Array(5);
+  /** labor force shares by group at the start */
+  share = new Float64Array(5).fill(0.2);
+
+  measure(w: World) {
+    this.un.fill(0);
+    this.lf.fill(0);
+    for (let c = 0; c < w.nc; c++) {
+      const wt = w.weight[c];
+      for (let i = w.countyStart[c]; i < w.countyStart[c + 1]; i++) {
+        const st = w.status[i];
+        if (st === STATUS.EMPLOYED) this.lf[w.race[i]] += wt;
+        else if (st === STATUS.UNEMPLOYED) {
+          this.lf[w.race[i]] += wt;
+          this.un[w.race[i]] += wt;
+        }
+      }
+    }
+  }
+
+  calibrate(w: World) {
+    this.measure(w);
+    const tot = this.lf.reduce((a, b) => a + b, 0);
+    this.share = this.lf.map((x) => x / tot);
+  }
+
+  /** Twin unemployment rate per group, from the last measure(). */
+  rates(): Float64Array {
+    return this.un.map((u, g) => (this.lf[g] > 0 ? u / this.lf[g] : 0));
+  }
+
+  /** Errors against the frame; returns the share-weighted mean absolute gap error over targeted groups. */
+  evaluate(w: World, frame: ReleaseFrame): number {
+    this.measure(w);
+    const uAll = this.un.reduce((a, b) => a + b, 0) / this.lf.reduce((a, b) => a + b, 0);
+    let err = 0;
+    let wsum = 0;
+    for (const t of RACE_TARGETS) {
+      const g = t.race;
+      const u = this.lf[g] > 0 ? this.un[g] / this.lf[g] : uAll;
+      this.e[g] = u - uAll - frame.raceGap![g];
+      err += this.share[g] * Math.abs(this.e[g]);
+      wsum += this.share[g];
+    }
+    // initial slope guess: a group's rate moves about 2u per log point of risk
+    for (const t of RACE_TARGETS) if (Number.isNaN(this.prevE[t.race])) this.slope[t.race] = Math.max(this.slope[t.race], 1.5 * uAll);
+    return err / (wsum || 1);
+  }
+
+  newMonth() {
+    this.prevE.fill(NaN);
+  }
+
+  update(): boolean {
+    let moved = false;
+    for (const t of RACE_TARGETS) {
+      const g = t.race;
+      if (!Number.isNaN(this.prevE[g]) && Math.abs(this.x[g] - this.prevX[g]) > 1e-4) {
+        const k = (this.e[g] - this.prevE[g]) / (this.x[g] - this.prevX[g]);
+        if (k > 0.01 && k < 2) this.slope[g] = 0.5 * this.slope[g] + 0.5 * k;
+      }
+      this.prevX[g] = this.x[g];
+      this.prevE[g] = this.e[g];
+      const dx = clamp(-this.e[g] / this.slope[g], -0.3, 0.3);
+      if (Math.abs(this.e[g]) > 0.0005 && Math.abs(dx) > 1e-4) {
+        this.x[g] = clamp(this.x[g] + dx, -1.5, 1.5);
+        moved = true;
+      }
+    }
+    this.apply();
+    return moved;
+  }
+
+  apply() {
+    let m = 0;
+    for (let g = 0; g < 5; g++) m += this.share[g] * Math.exp(this.x[g]);
+    for (let g = 0; g < 5; g++) this.risk[g] = Math.exp(this.x[g]) / m;
+  }
+}
+
 export class Assimilator {
   logA = 0;
   P = 1;
@@ -261,6 +389,7 @@ export class Assimilator {
   private trial: World | null = null;
   lf0 = 0;
   readonly states: StateSolver | null;
+  readonly race = new RaceSolver();
 
   constructor(
     private engine: Engine,
@@ -278,10 +407,30 @@ export class Assimilator {
     return this.states?.logQ ?? null;
   }
 
+  /** Applied race-incidence multipliers (meta.races order). */
+  get raceRisk(): Float64Array {
+    return this.race.risk;
+  }
+
   /** Record the start-of-history state labor forces the dials are measured against. */
   calibrate(world: World, laborForce: number) {
     this.lf0 = laborForce;
     this.states?.calibrate(world);
+  }
+
+  /** Measure race labor-force shares before the spin-up starts moving the race dials. */
+  calibrateRace(world: World) {
+    this.race.calibrate(world);
+  }
+
+  /**
+   * One step of the race dials during the spin-up, so the start-of-history
+   * labor market already carries the race gaps of the first release.
+   */
+  spinupRace(world: World, frame: ReleaseFrame) {
+    if (!frame.raceGap) return;
+    this.race.evaluate(world, frame);
+    this.race.update();
   }
 
   /**
@@ -295,11 +444,14 @@ export class Assimilator {
     const trial = (this.trial ??= world.clone());
     const st = frame.stateGap && frame.stateLfRatio ? this.states : null;
     st?.newMonth();
+    const rc = frame.raceGap ? this.race : null;
+    rc?.newMonth();
     let x = [this.logA, this.P];
-    type Best = { x: number[]; stats: MonthStats; err: number; F: number[]; sErr: number | null; logR?: Float64Array; logQ?: Float64Array; at: number };
+    type Best = { x: number[]; stats: MonthStats; err: number; F: number[]; sErr: number | null; logR?: Float64Array; logQ?: Float64Array; raceX?: Float64Array; at: number };
     let best: Best | null = null;
     let evaluations = 0;
     let sErr = 0;
+    let rErr = 0;
     const evalAt = (xx: number[]) => {
       trial.copyDynamicFrom(world);
       this.logA = xx[0];
@@ -311,13 +463,14 @@ export class Assimilator {
         target[1] == null ? 0 : stats.laborForce / this.lf0 - target[1],
       ];
       sErr = st ? st.evaluate(trial, frame) : 0;
-      const err = Math.abs(F[0]) + Math.abs(F[1]) + 0.5 * sErr;
+      rErr = rc ? rc.evaluate(trial, frame) : 0;
+      const err = Math.abs(F[0]) + Math.abs(F[1]) + 0.5 * sErr + 0.25 * rErr;
       if (!best || err < best.err) {
-        best = { x: xx.slice(), stats, err, F, sErr: st ? sErr : null, logR: st?.logR.slice(), logQ: st?.logQ.slice(), at: evaluations };
+        best = { x: xx.slice(), stats, err, F, sErr: st ? sErr : null, logR: st?.logR.slice(), logQ: st?.logQ.slice(), raceX: rc?.x.slice(), at: evaluations };
       }
       return F;
     };
-    const unsolved = (F: number[]) => Math.abs(F[0]) + Math.abs(F[1]) > TOL || (st != null && sErr > STATE_TOL);
+    const unsolved = (F: number[]) => Math.abs(F[0]) + Math.abs(F[1]) > TOL || (st != null && sErr > STATE_TOL) || (rc != null && rErr > RACE_TOL);
     let F = evalAt(x);
     while (evaluations < MAX_EVALS && unsolved(F)) {
       const [[a, b], [c, d]] = this.J;
@@ -329,7 +482,9 @@ export class Assimilator {
       dx = [-dx[0] / m, -dx[1] / m];
       const nx = [clamp(x[0] + dx[0], BOUNDS.logA[0], BOUNDS.logA[1]), clamp(x[1] + dx[1], BOUNDS.P[0], BOUNDS.P[1])];
       const step = [nx[0] - x[0], nx[1] - x[1]];
-      const statesMoved = st ? st.update() : false;
+      const stateMoved = st ? st.update() : false;
+      const raceMoved = rc ? rc.update() : false;
+      const statesMoved = stateMoved || raceMoved;
       const s2 = step[0] * step[0] + step[1] * step[1];
       if (s2 < 1e-14 && !statesMoved) break;
       const nF = evalAt(nx);
@@ -353,6 +508,10 @@ export class Assimilator {
       if (st) {
         st.logR.set(b.logR!);
         st.logQ.set(b.logQ!);
+      }
+      if (rc) {
+        rc.x.set(b.raceX!);
+        rc.apply();
       }
       evalAt(b.x);
     }

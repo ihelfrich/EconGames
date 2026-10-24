@@ -156,11 +156,25 @@ Each state dial gets its own secant step from the last two trials, and the
 dials are re-centered every step so the national dials keep carrying the
 aggregate. The dials multiply every county in the state, so **nothing about
 counties is fed in after 2016**: the pattern inside a state is still the
-model's answer. Across 2016–2026 the state gaps track within 0.11 points on
-average (max 0.21). The dials are readable as data: in April 2020 the twin
-had to cut demand a further 28% in Hawaii, 27% in Michigan and 25% in Nevada
-beyond the national shock, and in May Michigan's dial jumped 27% as the auto
+model's answer. Across 2016–2026 the state gaps track within 0.10 points on
+average (max 0.36). The dials are readable as data: in April 2020 the twin
+had to cut demand a further 26% in Hawaii, 25% in Nevada and 24% in Michigan
+beyond the national shock, and in May Michigan's dial jumped back as the auto
 plants reopened. The map layer "Hidden state demand" shows them live.
+
+### Who is unemployed: race and ethnicity
+
+CPS publishes unemployment by race and ethnicity every month. The engine's
+`raceRisk` driver multiplies each person's chance of losing a job and divides
+their chance of finding one by a dial for their group, and the assimilator
+solves the Black, Asian and Hispanic dials (relative to non-Hispanic white)
+so each group's gap to the national rate matches CPS. The dials settle during
+the spin-up, so January 2016 already carries the CPS gaps (Black unemployment
+8.7% vs 4.9% overall). They are re-scaled to average 1 across the labor
+force, so the national dials keep their meaning. CPS counts Hispanics of any
+race while the twin's groups do not overlap, so the match is approximate.
+Tracking: Black 16.9% vs CPS 16.9% and Hispanic 18.9% vs 18.9% in April
+2020.
 
 Real policy is on a calendar (`POLICY_CALENDAR`): the CARES Act UI extension
 and $600 supplement, the December 2020 and March 2021 extensions, and the
@@ -173,9 +187,10 @@ From `npm run twin:backtest` (bundled data, releases through Sep 2026):
 | Check | Result |
 | --- | --- |
 | National unemployment, Feb 2016 to Sep 2026 (targeted) | mean error 0.02 pts, max 0.06 pts, including April 2020 (14.8%) |
-| State unemployment gaps, 51 states (targeted) | mean error 0.11 pts, max 0.21 pts |
+| State unemployment gaps, 51 states (targeted) | mean error 0.10 pts, max 0.36 pts |
+| Unemployment by race and ethnicity (targeted) | mean error: Black 0.10 pts, Asian 0.14 pts, Hispanic 0.09 pts |
 | Inferred labor demand, April 2020 | 0.75 of January 2016 (a 25% hidden demand shock) |
-| Long-term unemployment share, 27+ weeks (**never targeted**; duration behavior calibrated on 2016–2019 only) | mean error 2.6 pts. Jan 2021: BLS 39.4%, twin 34.5% |
+| Long-term unemployment share, 27+ weeks (**never targeted**; duration behavior calibrated on 2016–2019 only) | mean error 2.4 pts |
 
 County unemployment in 2020, 3,136 counties, labor-force weighted. "Twin" is
 BLS 2016 plus the twin's own 2016→2020 change. No county data after 2016 goes
@@ -184,7 +199,8 @@ in; the state forecasts know each state's actual change, like the twin does.
 | Forecast | RMSE, all counties | Δ corr. | RMSE inside states | Δ corr. inside states |
 | --- | --- | --- | --- | --- |
 | Twin, national releases only (previous version) | 2.33 | 0.21 | | |
-| **Twin, national + state releases** | **1.78** | **0.57** | 1.77 | 0.15 |
+| Twin, national + state releases | 1.78 | 0.57 | 1.77 | 0.15 |
+| **Twin, national + state + race releases** | **1.75** | **0.58** | 1.73 | 0.19 |
 | Uniform national shift | 1.88 | — | 1.31 | — |
 | Proportional national scaling | 2.11 | -0.04 | 1.61 | -0.15 |
 | Every county moves with its state | 1.31 | 0.72 | 1.31 | — |
@@ -192,10 +208,11 @@ in; the state forecasts know each state's actual change, like the twin does.
 
 Steering by state releases cuts the twin's county error by a quarter and lifts
 the change correlation from 0.21 to 0.57, so it now beats the national
-baselines. Inside states it points the right way (0.15, where proportional
-scaling points the wrong way) but its error is still above "every county moves
-with its state". A within-state regression on the BLS data says what is
-missing:
+baselines. Steering who is unemployed by race adds a little more inside
+states (0.15 to 0.19). Inside states the twin points the right way, where
+proportional scaling points the wrong way, but its error is still above
+"every county moves with its state". A within-state regression on the BLS
+data (state-steered twin, before the race dials) says what is missing:
 
 | County trait (within-state) | Share of the actual 2016→2020 change it explains | Share of the twin's miss it explains |
 | --- | --- | --- |
@@ -206,19 +223,16 @@ missing:
 | Leisure & hospitality share | 3% | 0.4% |
 | College share | 2% | 0% |
 
-The twin already captures industry exposure. What it lacks is the urban and
+The twin already captures industry exposure. What it lacked was the urban and
 racial pattern: denser places and places with more Black and Hispanic workers
-lost far more jobs than their industry mix predicts. Those are the next
-mechanisms:
-
-1. **Unequal incidence by race and ethnicity.** CPS publishes monthly
-   unemployment by race and ethnicity. Steering one incidence dial per group
-   (who is laid off and who is hired, within the same jobs) would carry that
-   pattern into every county through its own residents.
-2. **Density and face-to-face work.** Commuting, task exposure (O*NET),
-   remote work and health shocks: whatever your and Liz's work says drives
-   local labor markets. The scoreboard in the UI and `twin:backtest` show
-   whether it helps.
+lost far more jobs than their industry mix predicts. Steering race incidence
+to CPS closes a small part of that. The rest is density: in the twin a
+restaurant job in Manhattan and one in rural Kansas face the same shock. The
+twin's rise by county size (+1.9 points in counties under 50k vs BLS +1.4,
++4.1 in counties over 1M vs BLS +4.6) shows the gradient is too flat. That is
+the next mechanism, and the natural place for research: commuting, task
+exposure (O*NET), remote work, face-to-face contact and health shocks. The
+scoreboard in the UI and `twin:backtest` show whether it helps.
 
 ## 5. Data sources
 

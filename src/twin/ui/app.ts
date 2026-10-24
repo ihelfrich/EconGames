@@ -332,6 +332,22 @@ class App {
     };
     push(this.chartU, [f(m.observed?.unrate), f(m.national.unemploymentRate), f(m.branch?.national.unemploymentRate)]);
     push(this.chartLT, [f(m.observed?.longTermShare), f(m.national.longTermShare), f(m.branch?.national.longTermShare)]);
+    this.renderRace(m);
+  }
+
+  renderRace(m: MonthMessage) {
+    const r = m.race;
+    if (!r || !r.observed) return;
+    $('raceBox').classList.remove('hidden');
+    const races = this.data.counties.meta.races;
+    const rows = [1, 3, 2, 0]
+      .map((g) => {
+        const obs = r.observed![g];
+        const label = races[g];
+        return `<tr><td>${label}</td><td>${Number.isNaN(obs) ? '—' : pct(obs)}</td><td>${pct(r.twin[g])}</td><td>${r.risk[g].toFixed(2)}×</td></tr>`;
+      })
+      .join('');
+    $('raceTable').innerHTML = `<tr><th>Group</th><th>CPS</th><th>Twin</th><th>Job-loss risk</th></tr>${rows}`;
   }
 
   // ------------------------------------------------------------ map
@@ -957,7 +973,7 @@ class App {
       ? `With the state releases steering it, the twin's error across all counties falls to ${bt.rmse.twinDelta.toFixed(2)} pts. The hard test is inside states, where the twin only knows each county's people and industries. ${
           twinWins
             ? `There it beats assuming every county moved with its state (${bt.withinState.rmse.twinDelta.toFixed(2)} vs ${bar.toFixed(2)} pts): the county mix carries real information about who got hit.`
-            : `There it points the right way (change correlation ${bt.withinState.changeCorrelation.twinDelta.toFixed(2)}) but does not yet beat assuming every county moved with its state (${bt.withinState.rmse.twinDelta.toFixed(2)} vs ${bar.toFixed(2)} pts). In the BLS data, density explains about a third of the within-state pattern and the share of residents who are not non-Hispanic white about 30%; the twin gets little of either. That gap is where the next mechanisms go.`
+            : `There it points the right way (change correlation ${bt.withinState.changeCorrelation.twinDelta.toFixed(2)}) but does not yet beat assuming every county moved with its state (${bt.withinState.rmse.twinDelta.toFixed(2)} vs ${bar.toFixed(2)} pts). In the BLS data, density explains about a third of the within-state pattern and the share of residents who are not non-Hispanic white about 30%; the twin now steers who is unemployed by race to CPS, but nothing in it yet makes a dense county different from a sparse one with the same jobs. That gap is where the next mechanisms go.`
         }`
       : 'Steered by national data only, the twin does not beat a uniform shift: the county\'s state explains about half of the 2016→2020 change. Add state releases (pipeline/refresh_states.py) to steer it by state.';
     // urban gradient by county size

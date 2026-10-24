@@ -47,6 +47,10 @@ export interface MonthRecord {
   stateLogQ: Float32Array | null;
   /** state-gap tracking error of the solve (share), null when not solved against states */
   stateError: number | null;
+  /** race-incidence multipliers used this month (meta.races order) */
+  raceRisk: Float32Array | null;
+  /** twin unemployment rate by race this month, when solved against CPS */
+  raceRates?: Float32Array;
 }
 
 export class Simulation {
@@ -78,6 +82,7 @@ export class Simulation {
       sector: new Float64Array(ns).fill(1),
       regional: new Float64Array(world.nc).fill(1),
       lfRegional: new Float64Array(world.nc).fill(1),
+      raceRisk: new Float64Array(5).fill(1),
       policy: DEFAULT_POLICY,
     };
     this.shocks = noShocks(ns, world.nc);
@@ -87,7 +92,14 @@ export class Simulation {
     const world = synthesize(data.counties, { ...DEFAULT_POPULATION, ...opts });
     const engine = new Engine(data.counties);
     const sim = new Simulation(data, world, engine);
-    const stats = engine.spinup(world, sim.drivers, spinupMonths);
+    // the race dials settle during the spin-up, so history starts with the first release's race gaps
+    const first = sim.frames[0];
+    sim.assim.calibrateRace(world);
+    const stats = engine.spinup(world, sim.drivers, spinupMonths, (w, m) => {
+      if (m < 2 || !first?.raceGap) return;
+      sim.assim.spinupRace(w, first);
+      sim.drivers.raceRisk!.set(sim.assim.raceRisk);
+    });
     sim.assim.calibrate(world, stats.laborForce);
     sim.countyHistory.push(stats.countyU);
     sim.history.push({
@@ -103,6 +115,7 @@ export class Simulation {
       stateLogR: null,
       stateLogQ: null,
       stateError: null,
+      raceRisk: Float32Array.from(sim.assim.raceRisk),
     });
     return sim;
   }
@@ -129,12 +142,12 @@ export class Simulation {
     if (this.parent) {
       const p = this.parent.history[this.world.t + 1];
       if (!p) throw new Error('step the parent timeline first');
-      this.setDrivers(p.logDemand, p.participation, p.observed?.sectorMix ?? this.drivers.sector, p.policy, p.stateLogR, p.stateLogQ);
+      this.setDrivers(p.logDemand, p.participation, p.observed?.sectorMix ?? this.drivers.sector, p.policy, p.stateLogR, p.stateLogQ, p.raceRisk);
       const stats = this.engine.step(this.world, this.drivers);
       rec = { ...p, mode: 'branch', stats, policy: this.drivers.policy, evaluations: 1 };
     } else if (frame && frame.unrate != null) {
       const res = this.assim.step(this.world, frame, (w) => {
-        this.setDrivers(this.assim.logA, this.assim.P, frame.sectorMix, pol.policy, this.assim.stateLogR, this.assim.stateLogQ);
+        this.setDrivers(this.assim.logA, this.assim.P, frame.sectorMix, pol.policy, this.assim.stateLogR, this.assim.stateLogQ, this.assim.raceRisk);
         return this.engine.step(w, this.drivers);
       });
       rec = {
@@ -150,10 +163,12 @@ export class Simulation {
         stateLogR: this.assim.stateLogR && Float32Array.from(this.assim.stateLogR),
         stateLogQ: this.assim.stateLogQ && Float32Array.from(this.assim.stateLogQ),
         stateError: res.stateError,
+        raceRisk: Float32Array.from(this.assim.raceRisk),
+        raceRates: frame.raceGap ? Float32Array.from(this.assim.race.rates()) : undefined,
       };
     } else {
       const last = this.history[this.history.length - 1];
-      this.setDrivers(last.logDemand, last.participation, this.drivers.sector, pol.policy, last.stateLogR, last.stateLogQ);
+      this.setDrivers(last.logDemand, last.participation, this.drivers.sector, pol.policy, last.stateLogR, last.stateLogQ, last.raceRisk);
       const stats = this.engine.step(this.world, this.drivers);
       rec = {
         label,
@@ -168,6 +183,7 @@ export class Simulation {
         stateLogR: last.stateLogR,
         stateLogQ: last.stateLogQ,
         stateError: null,
+        raceRisk: last.raceRisk,
       };
     }
     this.history.push(rec);
@@ -175,7 +191,16 @@ export class Simulation {
     return rec;
   }
 
-  private setDrivers(logA: number, P: number, mix: Float64Array, policy: Policy, logR: ArrayLike<number> | null, logQ: ArrayLike<number> | null) {
+  private setDrivers(
+    logA: number,
+    P: number,
+    mix: Float64Array,
+    policy: Policy,
+    logR: ArrayLike<number> | null,
+    logQ: ArrayLike<number> | null,
+    raceRisk: ArrayLike<number> | null,
+  ) {
+    if (raceRisk) this.drivers.raceRisk!.set(raceRisk);
     const s = this.shocks;
     this.drivers.demand = Math.exp(logA) * s.demand;
     this.drivers.participation = P;
