@@ -16,7 +16,8 @@ Chart.defaults.font.family = "'Space Grotesk', system-ui, sans-serif";
 Chart.defaults.font.size = 10.5;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const BASE = `${import.meta.env.BASE_URL}twin-data/`;
+// absolute, so the worker (which resolves relative URLs against its own script) finds the same files
+const BASE = new URL(`${import.meta.env.BASE_URL}twin-data/`, location.href).href;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const pct = (v: number | null | undefined, d = 1) => (v == null ? '—' : `${(100 * v).toFixed(d)}%`);
 const money = (v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(v >= 100000 ? 0 : 1)}k` : Math.round(v)}`;
